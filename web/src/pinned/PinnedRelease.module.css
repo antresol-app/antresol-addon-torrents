@@ -1,0 +1,62 @@
+/* The pinned release card of a title page (PinnedRelease.tsx). */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  max-width: 60ch;
+}
+.heading {
+  margin: 0;
+  font: var(--t-footnote-em);
+  color: var(--label-2);
+}
+.name {
+  margin: 0;
+  font: var(--t-headline);
+  color: var(--label);
+  overflow-wrap: anywhere;
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1h);
+  margin: 0;
+  font: var(--t-footnote);
+  color: var(--label-2);
+}
+.none {
+  margin: 0;
+  font: var(--t-subhead);
+  color: var(--label-2);
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.said {
+  margin: 0;
+  font: var(--t-footnote);
+  color: var(--label-2);
+}
+.error {
+  margin: 0;
+  font: var(--t-subhead);
+  color: var(--warning);
+}
+.file {
+  margin: 0;
+  font: var(--t-footnote);
+  color: var(--label-2);
+  overflow-wrap: anywhere;
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-3);
+}
+.form > :first-child {
+  align-self: stretch;
+}

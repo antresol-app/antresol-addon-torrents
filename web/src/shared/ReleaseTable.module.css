@@ -1,0 +1,269 @@
+.table {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2h);
+}
+/* the header and both lists (wider screens: one grid, see the media query below) */
+.grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2h);
+}
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px 56px auto;
+  align-items: center;
+  gap: var(--s-3h);
+  padding: var(--s-3) var(--s-1);
+  border-bottom: 1px solid var(--separator);
+}
+.sortRow {
+  padding-top: 0;
+  padding-bottom: var(--s-1h);
+}
+.sortCell {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: var(--s-0) 0;
+  border: 0;
+  background: none;
+  font: 600 12px / 1.2 var(--font-text);
+  color: var(--label-3);
+  cursor: pointer;
+}
+.sortCell:hover,
+.sortOn {
+  color: var(--label);
+}
+.sortMain {
+  justify-self: start;
+}
+.sortNum {
+  justify-self: end;
+}
+.row:last-child {
+  border-bottom: 0;
+}
+.main {
+  min-width: 0;
+}
+.title {
+  font: 500 14px / 1.35 var(--font-text);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-1h);
+  margin-top: 5px;
+  font: var(--t-footnote);
+  color: var(--label-2);
+}
+.tag,
+.lang {
+  /* the core's ui badge (Badge.module.css .badge), inlined: an addon's
+     stylesheet cannot compose the core's */
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  background: var(--fill-4);
+  color: var(--label-2);
+  font: 600 11px / 18px var(--font-text);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+/* .strong: the fact that matters most in a row (a release's language) */
+.lang {
+  border-color: transparent;
+  background: var(--fill-2);
+  color: var(--label);
+}
+/* .warning: a fact that does not match what was asked for (after .lang) */
+.mismatch {
+  border-color: var(--warning);
+  background: none;
+  color: var(--warning);
+}
+.otherFormat .title {
+  color: var(--label-2);
+}
+.reasons {
+  margin-top: var(--s-1);
+  font: var(--t-footnote);
+  color: var(--label-3);
+}
+.size,
+.seeds {
+  font: 500 13px / 1 var(--font-text);
+  font-variant-numeric: tabular-nums;
+  color: var(--label-2);
+  text-align: right;
+}
+.seeds {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  color: var(--success);
+}
+.actions {
+  display: flex;
+  gap: var(--s-2);
+}
+.best {
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-bottom: var(--s-1);
+  border-bottom: 1px solid var(--separator);
+}
+.best .title {
+  font-weight: 600;
+}
+.rejected .title {
+  color: var(--label-2);
+}
+.more {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1h);
+  align-self: flex-start;
+  min-height: var(--control-h-sm);
+  padding: 0 var(--s-1);
+  border: 0;
+  background: transparent;
+  color: var(--label-2);
+  font: 500 14px / 1 var(--font-text);
+}
+.failed {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2h) var(--s-3);
+  border-radius: var(--r-field);
+  background: var(--warning-fill);
+  color: var(--warning);
+  font: var(--t-footnote);
+}
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-3);
+  min-height: 180px;
+  color: var(--label-2);
+  font: var(--t-subhead);
+  text-align: center;
+}
+.spinner {
+  width: 26px;
+  height: 26px;
+  border: 2.5px solid var(--fill-1);
+  border-top-color: var(--label);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* sources still searched while the list fills in */
+.pending {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 0 var(--s-1);
+  font: var(--t-footnote);
+  color: var(--label-2);
+}
+.miniSpinner {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--fill-1);
+  border-top-color: var(--label-2);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner,
+  .miniSpinner {
+    animation-duration: 2.4s;
+  }
+}
+/* the header and every row are subgrids of one grid: the size, seeders and
+   action columns are as wide as their widest cell in all rows, so the
+   header's labels sit over the values whatever the buttons say */
+@media (min-width: 700px) {
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(76px, auto) minmax(56px, auto) auto;
+    column-gap: var(--s-3h);
+    row-gap: var(--s-2h);
+  }
+  .grid > * {
+    grid-column: 1 / -1;
+  }
+  .grid > .more {
+    justify-self: start;
+  }
+  .grid > .list {
+    display: grid;
+    grid-template-columns: subgrid;
+  }
+  .grid > .sortRow,
+  .list > .row {
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+  }
+  .actions {
+    justify-self: end;
+  }
+}
+@media (max-width: 699px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'main main'
+      'size actions';
+    gap: var(--s-2) var(--s-3);
+  }
+  .best {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: none;
+  }
+  .main {
+    grid-column: 1 / -1;
+  }
+  .size {
+    text-align: left;
+  }
+  .seeds {
+    display: none;
+  }
+  /* the header of the phone row: one line, the columns that are shown */
+  .sortRow {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
+  .sortSeeds,
+  .sortActions {
+    display: none;
+  }
+}

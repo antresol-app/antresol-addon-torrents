@@ -1,0 +1,22 @@
+/* Statistics' figures (the core's Stats.module.css .tiles/.tile…): the
+   number large on a card, what it counts under it */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--s-3);
+  margin-bottom: var(--s-3);
+}
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+.tileValue {
+  font: 700 30px / 1.1 var(--font-display);
+  letter-spacing: var(--track-tight);
+  font-variant-numeric: tabular-nums;
+}
+.tileLabel {
+  font: var(--t-footnote);
+  color: var(--label-2);
+}

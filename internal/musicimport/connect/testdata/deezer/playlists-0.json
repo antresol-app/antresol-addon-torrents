@@ -1,0 +1,6 @@
+{"data":[
+{"id":9001,"title":"Любимые треки","duration":1565,"public":false,"is_loved_track":true,"collaborative":false,"nb_tracks":5,"fans":0,"link":"https://www.deezer.com/playlist/9001","checksum":"a1","time_add":1680000000,"time_mod":1700000400,"creator":{"id":5123456,"name":"listener","type":"user"},"type":"playlist"},
+{"id":1001,"title":"Дорога","duration":900,"public":true,"is_loved_track":false,"collaborative":false,"nb_tracks":3,"fans":2,"link":"https://www.deezer.com/playlist/1001","checksum":"b2","time_add":1680000100,"time_mod":1700000500,"creator":{"id":5123456,"name":"listener","type":"user"},"type":"playlist"},
+{"id":1002,"title":"Чужой плейлист","duration":600,"public":true,"is_loved_track":false,"collaborative":false,"nb_tracks":1,"fans":9000,"link":"https://www.deezer.com/playlist/1002","checksum":"c3","time_add":1680000200,"time_mod":1690000000,"creator":{"id":777,"name":"Deezer Editor","type":"user"},"type":"playlist"},
+{"id":1003,"title":"Удалённый","duration":0,"public":false,"is_loved_track":false,"collaborative":false,"nb_tracks":2,"fans":0,"link":"https://www.deezer.com/playlist/1003","checksum":"d4","time_add":1680000300,"time_mod":1690000000,"creator":{"id":778,"name":"someone","type":"user"},"type":"playlist"}
+],"total":4}

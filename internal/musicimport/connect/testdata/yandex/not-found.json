@@ -1,0 +1,11 @@
+{
+ "invocationInfo": {
+  "hostname": "music-stable-back-vla-1",
+  "req-id": "1730000000000000-1",
+  "exec-duration-millis": 3
+ },
+ "error": {
+  "name": "not-found",
+  "message": "Playlist not found"
+ }
+}

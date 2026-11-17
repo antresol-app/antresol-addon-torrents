@@ -1,0 +1,21 @@
+{
+  "kind": "youtube#channelListResponse",
+  "etag": "e1",
+  "pageInfo": {
+    "totalResults": 1,
+    "resultsPerPage": 5
+  },
+  "items": [
+    {
+      "kind": "youtube#channel",
+      "etag": "e2",
+      "id": "UCme0000000000000000000",
+      "contentDetails": {
+        "relatedPlaylists": {
+          "likes": "LL",
+          "uploads": "UUme0000000000000000000"
+        }
+      }
+    }
+  ]
+}

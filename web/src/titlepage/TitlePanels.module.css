@@ -1,0 +1,75 @@
+/* The addon's parts of an item's and a title's page (itemPanels, the watch
+   and download sheets): copies of the core's pages/ItemDetail.module.css
+   rules they name (an addon cannot compose from the core's files). Tokens
+   only (web/DESIGN.md). */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  margin-top: var(--s-3);
+}
+.acquire {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.episodePick {
+  display: flex;
+  gap: var(--s-2h);
+}
+.acquireNote {
+  font: var(--t-footnote);
+  color: var(--label-2);
+}
+.acquireDone {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  max-width: 60ch;
+  font: var(--t-subhead);
+  color: var(--success);
+}
+.acquireDone svg {
+  flex: none;
+  margin-top: 1px;
+}
+.acquireError {
+  max-width: 60ch;
+  font: var(--t-subhead);
+  color: var(--warning);
+}
+/* «Следить» with its hint under the button */
+.follow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-1h);
+  max-width: 260px;
+}
+/* «Следит: Мама» — another profile's follow (not a control) */
+.followedBy {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  height: 52px;
+  padding: 0 var(--s-6);
+  border-radius: var(--r-pill);
+  font: var(--t-control);
+  color: var(--label-2);
+  white-space: nowrap;
+}
+.followedOff {
+  font: 500 13px / 1 var(--font-text);
+  color: var(--label-3);
+}
+@media (max-width: 699px) {
+  .episodePick {
+    justify-content: center;
+  }
+  .follow {
+    max-width: none;
+  }
+  .followedBy {
+    justify-content: center;
+  }
+}

@@ -1,0 +1,170 @@
+/* A row of the downloads list (ui/List's group holds the rows). The poster
+   sets the row's height; the trailing column is as tall as the poster and
+   centres its buttons on it, so they line up from row to row whatever the
+   notes under the title. */
+.row {
+  --poster-w: 40px;
+  --poster-h: 60px;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3h);
+  padding: var(--s-3) var(--s-4);
+}
+.item + .item {
+  border-top: 1px solid var(--separator);
+}
+.poster {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--poster-w);
+  height: var(--poster-h);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--fill-3);
+  color: var(--label-3);
+}
+.poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.main {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--poster-h);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--s-1);
+}
+.name {
+  font: var(--t-headline);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* «Загружается · 23 % · 6,7 ГБ из 29,2 ГБ · ↓ 3,1 МБ/с»: the word in the
+   state's colour, the facts in the secondary label, dots between them */
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: var(--s-0);
+  font: var(--t-footnote);
+  font-variant-numeric: tabular-nums;
+  color: var(--label-2);
+}
+.word {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  font: var(--t-footnote-em);
+  color: var(--accent);
+}
+/* one separator for every fact: the same dot and spacing before each; a
+   fact never breaks, a wrapped line starts with its dot */
+.meta {
+  white-space: nowrap;
+}
+.meta::before {
+  content: '·';
+  margin: 0 var(--s-1h);
+  color: var(--label-3);
+}
+.status > span + :not(.meta) {
+  margin-left: var(--s-1h);
+}
+.item[data-state='paused'] .word,
+.item[data-state='done'] .word {
+  color: var(--label-2);
+}
+/* waiting for room needs attention; a failure is an error */
+.item[data-state='waiting'] .word {
+  color: var(--warning);
+}
+.item[data-state='error'] .word {
+  color: var(--destructive-text);
+}
+/* seeding is the quiet state: a grey word, a small green ↑ */
+.item[data-state='seeding'] .word {
+  font: var(--t-footnote);
+  color: var(--label-2);
+}
+.seedIcon {
+  color: var(--success);
+}
+/* the main column's width, like the text above it */
+.bar {
+  margin: var(--s-1) 0 var(--s-0);
+}
+.note,
+.problem,
+.done {
+  max-width: 64ch;
+  font: var(--t-footnote);
+  color: var(--label-2);
+  overflow-wrap: anywhere;
+}
+.problem[data-tone='error'] {
+  color: var(--destructive-text);
+}
+.problem[data-tone='warning'] {
+  color: var(--warning);
+}
+.done {
+  color: var(--success);
+}
+.trailing {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  height: var(--poster-h);
+}
+/* the action slot of a row with nothing to do: the «⋯» stays in its column */
+.slot {
+  width: var(--control-h-sm);
+}
+
+/* the delete sheet's «Удалить файлы с диска» */
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: var(--s-3h);
+  font: var(--t-footnote);
+  color: var(--label);
+  cursor: pointer;
+}
+.check input {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+  accent-color: var(--destructive);
+}
+
+@media (max-width: 699px) {
+  .row {
+    --poster-w: 36px;
+    --poster-h: 54px;
+    gap: var(--s-3);
+    padding: var(--s-2h) var(--s-3);
+  }
+  /* two lines on phones: «— 1 трек из 28» is the part that tells rows apart */
+  .name {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+  }
+  .trailing {
+    gap: var(--s-1);
+  }
+  .check {
+    font: var(--t-subhead);
+  }
+  .check input {
+    width: var(--icon-md);
+    height: var(--icon-md);
+  }
+}

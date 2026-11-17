@@ -1,0 +1,14 @@
+{
+  "error": {
+    "code": 403,
+    "message": "The request is not properly authorized.",
+    "errors": [
+      {
+        "message": "The request is not properly authorized.",
+        "domain": "youtube.common",
+        "reason": "forbidden"
+      }
+    ],
+    "status": "PERMISSION_DENIED"
+  }
+}

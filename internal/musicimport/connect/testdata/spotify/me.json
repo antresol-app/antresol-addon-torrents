@@ -1,0 +1,7 @@
+{
+ "id": "me123",
+ "account_id": "acc-me",
+ "display_name": "Слушатель",
+ "type": "user",
+ "uri": "spotify:user:me123"
+}

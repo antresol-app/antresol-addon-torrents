@@ -1,0 +1,26 @@
+{
+ "invocationInfo": {
+  "hostname": "music-stable-back-vla-1",
+  "req-id": "1730000000000000-1",
+  "exec-duration-millis": 3
+ },
+ "result": {
+  "uid": 2220000,
+  "kind": 3001,
+  "title": "Чужой микс",
+  "trackCount": 1,
+  "owner": {
+   "uid": 2220000,
+   "login": "friend",
+   "name": "friend",
+   "verified": false
+  },
+  "tracks": [
+   {
+    "id": "9002",
+    "albumId": "5200",
+    "timestamp": "2026-02-01T00:00:00+00:00"
+   }
+  ]
+ }
+}

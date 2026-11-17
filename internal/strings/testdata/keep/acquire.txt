@@ -1,0 +1,18 @@
+internal/organize/media.go: (?i)^(?:cd|disc|disk|диск)\s*(\d+)  # disc-folder regex matched in Russian release names (parser data)
+internal/organize/media.go: (?i)(?:^|[\s\(\[\-_.,])[\(\[]?(?:cd|disc|disk|диск)\s*(\d+)[\)\]]?$  # disc-number regex for Russian release names (parser data)
+internal/organize/media.go: (?i)[\(\[]?\s*\b(?:cd|disc|disk|диск)\s*\d+\s*[\)\]]?  # disc-marker regex for Russian release names (parser data)
+internal/organize/organize.go: Без названия  # folder name written into the library on disk (stored metadata, not request UI)
+internal/torrent/holds.go: ошибка записи  # prefix matched in the stored status; the status itself is the key "ошибка записи: %s"
+internal/torrent/liveness.go: пасскей  # phrase matched in a tracker's failure reason (TrackerErrorKind), never shown
+internal/torrent/liveness.go: пасккей  # phrase matched in a tracker's failure reason (TrackerErrorKind), never shown
+internal/torrent/liveness.go: пас-кей  # phrase matched in a tracker's failure reason (TrackerErrorKind), never shown
+internal/torrent/liveness.go: неверный ключ  # phrase matched in a tracker's failure reason (TrackerErrorKind), never shown
+internal/torrent/liveness.go: не зарегистрирован  # phrase matched in a tracker's failure reason (TrackerErrorKind), never shown
+internal/torrent/liveness.go: раздача не найдена  # phrase matched in a tracker's failure reason (TrackerErrorKind), never shown
+internal/torrent/liveness.go: торрент не найден  # phrase matched in a tracker's failure reason (TrackerErrorKind), never shown
+internal/acquire/explicit.go  # words matched in catalog subjects to hide adult titles from kid profiles (filter data, never shown)
+internal/acquire/voiceovers.go: звуковая дорожка  # words matched in release names of voice-over releases (parser data)
+internal/acquire/voiceovers.go: звуковые дорожки  # words matched in release names of voice-over releases (parser data)
+internal/acquire/voiceovers.go: дорожк  # words matched in release names of voice-over releases (parser data)
+internal/acquire/voiceovers.go: озвучк  # words matched in release names of voice-over releases (parser data)
+internal/organize/seasons.go: (?i)^(?:season|сезон)[\s._-]*(\d{1,2})$  # season-folder regex matched in release folder names (parser data)

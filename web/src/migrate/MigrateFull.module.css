@@ -1,0 +1,70 @@
+/* The full build's part of «Переезд» (MigrateFull.tsx). */
+
+/* ---------- «Перейти на Vault» ---------- */
+.switchCard {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3h) var(--s-4);
+  padding: var(--s-4);
+  margin-bottom: var(--s-5);
+  border-radius: 16px;
+}
+.switchIcon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-control);
+  background: var(--indigo);
+  color: var(--white);
+}
+.switchIconDone {
+  background: var(--success);
+}
+.switchText h3 {
+  font: var(--t-headline);
+  color: var(--label);
+}
+.switchText p {
+  margin-top: var(--s-0);
+  font: var(--t-footnote);
+  color: var(--label-2);
+  text-wrap: pretty;
+}
+
+.sheetNote {
+  margin-top: var(--s-2);
+  font: var(--t-footnote);
+  color: var(--label-2);
+}
+.sheetError {
+  margin-top: var(--s-2);
+  font: var(--t-footnote);
+  color: var(--destructive);
+}
+.confirmCheck {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2h);
+  margin-top: var(--s-3h);
+  min-height: var(--control-h-md);
+  font: var(--t-group);
+  color: var(--label);
+  cursor: pointer;
+  text-align: left;
+}
+.confirmCheck input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+
+@media (max-width: 699px) {
+  .switchCard {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .switchCard > :last-child {
+    grid-column: 1 / -1;
+  }
+}

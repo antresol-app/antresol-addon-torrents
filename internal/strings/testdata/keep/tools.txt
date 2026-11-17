@@ -1,0 +1,2 @@
+# Whole files outside the addon's UI whose Russian literals are data, not text to translate.
+tools/mkfixture/releases.go # the e2e's fake releases: song, album, book and author names and the EPUB's pages are fixture data

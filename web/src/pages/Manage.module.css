@@ -1,0 +1,121 @@
+/* The building blocks of «Управление»'s sections the addon's pages use: a
+   copy of the core's pages/manage/Manage.module.css (the classes these pages
+   name), with ui/List's label, hint and foot inlined (an addon cannot
+   compose from the core's files). Tokens only (web/DESIGN.md). */
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-0);
+  min-height: var(--control-h-md);
+  margin: calc(-1 * var(--s-1h)) 0 var(--s-1) calc(-1 * var(--s-1h));
+  font: 400 17px / 1 var(--font-text);
+  color: var(--accent);
+}
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3) var(--s-4);
+  margin-bottom: var(--s-5);
+}
+.title {
+  font: var(--t-title-1);
+  letter-spacing: var(--track-display);
+}
+.subtitle {
+  margin-top: var(--s-1);
+  font: var(--t-subhead);
+  color: var(--label-2);
+}
+.headerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.rowLabel {
+  font: var(--t-callout);
+  color: var(--label);
+}
+.rowHint {
+  max-width: 62ch;
+  margin-top: var(--s-0);
+  font: var(--t-footnote);
+  color: var(--label-2);
+  text-wrap: pretty;
+}
+.groupFoot {
+  margin: var(--s-2) 0 0;
+  padding: 0;
+  font: var(--t-footnote);
+  color: var(--label-2);
+}
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-2h);
+  padding: 56px var(--s-4);
+  text-align: center;
+  color: var(--label-2);
+  border-radius: var(--r-sheet);
+  background: var(--fill-4);
+  border: 1px solid var(--glass-border);
+}
+.empty svg {
+  color: var(--label-3);
+}
+.empty h3 {
+  font: var(--t-title-3);
+  color: var(--label);
+}
+.empty p {
+  max-width: 46ch;
+  text-wrap: balance;
+}
+.problem {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2h);
+  padding: var(--s-3) var(--s-3h);
+  margin-bottom: var(--s-4);
+  border-radius: var(--r-control);
+  background: var(--warning-fill);
+  color: var(--warning);
+  font: var(--t-subhead);
+}
+.ok {
+  color: var(--success);
+}
+.spinnerRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2h);
+  padding: var(--s-12) 0;
+  color: var(--label-2);
+  font: var(--t-subhead);
+}
+.spinner {
+  width: 22px;
+  height: 22px;
+  border: 2.5px solid var(--fill-1);
+  border-top-color: var(--label);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2.4s;
+  }
+}
+@media (max-width: 699px) {
+  .title {
+    font: var(--t-large-title);
+  }
+}

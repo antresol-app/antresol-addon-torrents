@@ -1,0 +1,24 @@
+{
+  "kind": "youtube#playlistListResponse",
+  "etag": "e",
+  "pageInfo": {
+    "totalResults": 3,
+    "resultsPerPage": 50
+  },
+  "items": [
+    {
+      "kind": "youtube#playlist",
+      "etag": "e",
+      "id": "PLgone",
+      "snippet": {
+        "publishedAt": "2025-01-01T00:00:00Z",
+        "title": "Недоступный",
+        "description": "",
+        "channelTitle": "Слушатель"
+      },
+      "contentDetails": {
+        "itemCount": 2
+      }
+    }
+  ]
+}

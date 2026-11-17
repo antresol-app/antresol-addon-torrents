@@ -1,0 +1,57 @@
+{
+  "kind": "youtube#playlistItemListResponse",
+  "etag": "e",
+  "items": [
+    {
+      "kind": "youtube#playlistItem",
+      "etag": "e",
+      "id": "PLroad-0",
+      "snippet": {
+        "publishedAt": "2026-01-01T10:00:00Z",
+        "channelId": "UCme0000000000000000000",
+        "title": "Metallica - Sad But True (Official Music Video)",
+        "description": "",
+        "channelTitle": "Слушатель",
+        "videoOwnerChannelTitle": "Metallica",
+        "playlistId": "PLroad",
+        "position": 0,
+        "resourceId": {
+          "kind": "youtube#video",
+          "videoId": "metSadTrue1"
+        }
+      },
+      "contentDetails": {
+        "videoId": "metSadTrue1",
+        "videoPublishedAt": "2015-01-01T00:00:00Z"
+      }
+    },
+    {
+      "kind": "youtube#playlistItem",
+      "etag": "e",
+      "id": "PLroad-1",
+      "snippet": {
+        "publishedAt": "2026-01-01T10:01:00Z",
+        "channelId": "UCme0000000000000000000",
+        "title": "Кукушка",
+        "description": "",
+        "channelTitle": "Слушатель",
+        "videoOwnerChannelTitle": "Кино - Topic",
+        "playlistId": "PLroad",
+        "position": 1,
+        "resourceId": {
+          "kind": "youtube#video",
+          "videoId": "kinoKukush1"
+        }
+      },
+      "contentDetails": {
+        "videoId": "kinoKukush1",
+        "videoPublishedAt": "2015-01-01T00:00:00Z"
+      }
+    }
+  ],
+  "pageInfo": {
+    "totalResults": 5,
+    "resultsPerPage": 50
+  },
+  "nextPageToken": "roadPage2"
+}

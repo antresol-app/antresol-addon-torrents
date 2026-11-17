@@ -1,0 +1,75 @@
+{
+  "kind": "youtube#playlistItemListResponse",
+  "etag": "e",
+  "items": [
+    {
+      "kind": "youtube#playlistItem",
+      "etag": "e",
+      "id": "PLroad-2",
+      "snippet": {
+        "publishedAt": "2026-01-01T10:02:00Z",
+        "channelId": "UCme0000000000000000000",
+        "title": "Группа крови",
+        "description": "",
+        "channelTitle": "Слушатель",
+        "videoOwnerChannelTitle": "Кино - Topic",
+        "playlistId": "PLroad",
+        "position": 2,
+        "resourceId": {
+          "kind": "youtube#video",
+          "videoId": "kinoBlood01"
+        }
+      },
+      "contentDetails": {
+        "videoId": "kinoBlood01",
+        "videoPublishedAt": "2015-01-01T00:00:00Z"
+      }
+    },
+    {
+      "kind": "youtube#playlistItem",
+      "etag": "e",
+      "id": "PLroad-3",
+      "snippet": {
+        "publishedAt": "2026-01-01T10:03:00Z",
+        "channelId": "UCme0000000000000000000",
+        "title": "Аквариум – Город золотой [Official Audio]",
+        "description": "",
+        "channelTitle": "Слушатель",
+        "videoOwnerChannelTitle": "Аквариум",
+        "playlistId": "PLroad",
+        "position": 3,
+        "resourceId": {
+          "kind": "youtube#video",
+          "videoId": "akvGorod001"
+        }
+      },
+      "contentDetails": {
+        "videoId": "akvGorod001",
+        "videoPublishedAt": "2015-01-01T00:00:00Z"
+      }
+    },
+    {
+      "kind": "youtube#playlistItem",
+      "etag": "e",
+      "id": "PLroad-4",
+      "snippet": {
+        "publishedAt": "2026-01-01T10:04:00Z",
+        "title": "Deleted video",
+        "description": "This video is unavailable.",
+        "playlistId": "PLroad",
+        "position": 4,
+        "resourceId": {
+          "kind": "youtube#video",
+          "videoId": "delVideo001"
+        }
+      },
+      "contentDetails": {
+        "videoId": "delVideo001"
+      }
+    }
+  ],
+  "pageInfo": {
+    "totalResults": 5,
+    "resultsPerPage": 50
+  }
+}

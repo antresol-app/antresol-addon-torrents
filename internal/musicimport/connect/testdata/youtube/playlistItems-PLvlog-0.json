@@ -1,0 +1,33 @@
+{
+  "kind": "youtube#playlistItemListResponse",
+  "etag": "e",
+  "items": [
+    {
+      "kind": "youtube#playlistItem",
+      "etag": "e",
+      "id": "PLvlog-0",
+      "snippet": {
+        "publishedAt": "2026-01-02T10:00:00Z",
+        "channelId": "UCme0000000000000000000",
+        "title": "Мой день в Москве",
+        "description": "",
+        "channelTitle": "Слушатель",
+        "videoOwnerChannelTitle": "Блогер",
+        "playlistId": "PLvlog",
+        "position": 0,
+        "resourceId": {
+          "kind": "youtube#video",
+          "videoId": "vlogVideo01"
+        }
+      },
+      "contentDetails": {
+        "videoId": "vlogVideo01",
+        "videoPublishedAt": "2015-01-01T00:00:00Z"
+      }
+    }
+  ],
+  "pageInfo": {
+    "totalResults": 1,
+    "resultsPerPage": 50
+  }
+}

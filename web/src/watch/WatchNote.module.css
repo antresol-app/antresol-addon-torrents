@@ -1,0 +1,10 @@
+/* the player's waiting line, then (on its own line) why there is no headway */
+.note {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-1);
+}
+.stalled {
+  text-align: center;
+}

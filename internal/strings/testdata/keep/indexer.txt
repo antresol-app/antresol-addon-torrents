@@ -1,0 +1,23 @@
+internal/indexer/cardigann/dates.go  # Russian date words of tracker pages, matched to PARSE publish dates
+internal/indexer/cardigann/search.go: кб  # size units of tracker pages, parsed
+internal/indexer/cardigann/search.go: мб  # size units of tracker pages, parsed
+internal/indexer/cardigann/search.go: гб  # size units of tracker pages, parsed
+internal/indexer/cardigann/search.go: тб  # size units of tracker pages, parsed
+internal/indexer/cardigann/search.go: %w: %s перенаправил на %s  # technical detail of ErrUnavailable/ErrBadResponse: logs only (the user sees humanErr's fixed message)
+internal/indexer/cardigann/search.go: %w: %s ответил %d  # technical detail: logs only
+internal/indexer/cardigann/search.go: %w: некорректный JSON: %v  # technical detail: logs only
+internal/indexer/cardigann/search.go: %w: нет списка результатов %q  # technical detail: logs only
+internal/indexer/cardigann/search.go: %w: нет поля %q  # technical detail: logs only
+internal/indexer/cardigann/search.go: %w: поле %s: %v  # technical detail of ErrBadResponse: logs only
+internal/indexer/cardigann/direct.go: %w: %s ответил %d  # technical detail: logs only
+internal/indexer/cardigann/runner.go: %w: %s ответил %d  # technical detail: logs only
+internal/indexer/cardigann/runner.go: %w (%s): это прямая загрузка файла  # technical detail of ErrNotTorrent: logs only
+internal/indexer/cardigann/request.go: %w: %s прислал слишком большой ответ (больше %d МБ)  # technical detail of ErrBadResponse: logs only
+internal/indexer/cardigann/request.go: %w: FlareSolverr недоступен: %v  # technical detail of ErrCloudflare: logs only
+internal/indexer/cardigann/request.go: %w: ответ FlareSolverr не прочитан: %v  # technical detail of ErrCloudflare: logs only
+internal/indexer/score.go: (?i)(?:\bseasons?|сезон\p{L}*)\s*[:#№]?\s*\d{1,2}\s*(?:,|&|\+|\band\b|и\s)\s*\d{1,2}  # regex matched in Russian release names
+internal/indexer/score.go: (?i)\bcomplete\s+series\b|все\s+сезоны|полн\p{L}*\s+сериал  # regex matched in Russian release names
+internal/indexer/score_album.go: ^(?:the )?[\p{L}\d]+ (?:album|альбом)$  # regex matched in folded release names
+internal/indexer/score_album.go:  альбом  # word stripped from folded album nicknames (matching)
+internal/indexer/score_media.go: (?i)аудиокниг|аудиоспектакл|audio\s?book|unabridged|narrated|\bчита(ет|ют)\b|\bчтец|kbps|кбит|(^|[^\pL\pN])(mp3|m4b|m4a|aac|flac|ogg|opus)($|[^\pL\pN])  # regex matched in release names
+internal/indexer/score_media.go: и  # stopword of artist names (matching)

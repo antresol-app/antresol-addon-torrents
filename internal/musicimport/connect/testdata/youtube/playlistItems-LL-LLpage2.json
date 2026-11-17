@@ -1,0 +1,56 @@
+{
+  "kind": "youtube#playlistItemListResponse",
+  "etag": "e",
+  "items": [
+    {
+      "kind": "youtube#playlistItem",
+      "etag": "e",
+      "id": "LL-3",
+      "snippet": {
+        "publishedAt": "2026-02-26T10:00:00Z",
+        "channelId": "UCme0000000000000000000",
+        "title": "Прохождение, часть 1",
+        "description": "",
+        "channelTitle": "Слушатель",
+        "videoOwnerChannelTitle": "Игрок",
+        "playlistId": "LL",
+        "position": 3,
+        "resourceId": {
+          "kind": "youtube#video",
+          "videoId": "gameVideo01"
+        }
+      },
+      "contentDetails": {
+        "videoId": "gameVideo01",
+        "videoPublishedAt": "2015-01-01T00:00:00Z"
+      }
+    },
+    {
+      "kind": "youtube#playlistItem",
+      "etag": "e",
+      "id": "LL-4",
+      "snippet": {
+        "publishedAt": "2026-02-25T10:00:00Z",
+        "channelId": "UCme0000000000000000000",
+        "title": "Кукушка",
+        "description": "",
+        "channelTitle": "Слушатель",
+        "videoOwnerChannelTitle": "Кино - Topic",
+        "playlistId": "LL",
+        "position": 4,
+        "resourceId": {
+          "kind": "youtube#video",
+          "videoId": "kinoKukush1"
+        }
+      },
+      "contentDetails": {
+        "videoId": "kinoKukush1",
+        "videoPublishedAt": "2015-01-01T00:00:00Z"
+      }
+    }
+  ],
+  "pageInfo": {
+    "totalResults": 5,
+    "resultsPerPage": 50
+  }
+}

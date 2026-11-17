@@ -1,0 +1,6 @@
+/* the cancel sheet's error (the title page's .acquireError) */
+.acquireError {
+  max-width: 60ch;
+  font: var(--t-subhead);
+  color: var(--warning);
+}

@@ -1,0 +1,40 @@
+{
+ "invocationInfo": {
+  "hostname": "music-stable-back-vla-1",
+  "req-id": "1730000000000000-1",
+  "exec-duration-millis": 3
+ },
+ "result": [
+  {
+   "timestamp": "2025-03-01T10:00:00+00:00",
+   "album": {
+    "id": 5000,
+    "title": "Группа крови",
+    "year": 1988,
+    "trackCount": 11,
+    "artists": [
+     {
+      "id": 100,
+      "name": "Кино"
+     }
+    ]
+   }
+  },
+  {
+   "timestamp": "2024-12-24T08:15:00+00:00",
+   "album": {
+    "id": 5300,
+    "title": "Чёрный альбом",
+    "year": 1990,
+    "version": "Remastered",
+    "trackCount": 8,
+    "artists": [
+     {
+      "id": 100,
+      "name": "Кино"
+     }
+    ]
+   }
+  }
+ ]
+}

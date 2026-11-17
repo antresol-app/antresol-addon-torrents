@@ -1,0 +1,1530 @@
+{
+ "href": "https://api.spotify.com/v1/me/tracks?offset=0&limit=50",
+ "limit": 50,
+ "offset": 0,
+ "total": 120,
+ "next": "https://api.spotify.com/v1/me/tracks?offset=50&limit=50",
+ "previous": null,
+ "items": [
+  {
+   "added_at": "2026-02-02T10:01:00Z",
+   "track": {
+    "id": "t001",
+    "name": "Песня 1",
+    "duration_ms": 181000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Аквариум",
+      "id": "ar1"
+     }
+    ],
+    "album": {
+     "id": "al1",
+     "name": "Радио Африка",
+     "artists": [
+      {
+       "name": "Аквариум"
+      }
+     ],
+     "release_date": "1989",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800001"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-03-03T10:02:00Z",
+   "track": {
+    "id": "t002",
+    "name": "Песня 2",
+    "duration_ms": 182000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Metallica",
+      "id": "ar2"
+     }
+    ],
+    "album": {
+     "id": "al2",
+     "name": "Metallica",
+     "artists": [
+      {
+       "name": "Metallica"
+      }
+     ],
+     "release_date": "1991-08-12",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800002"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-04-04T10:03:00Z",
+   "track": {
+    "id": "t003",
+    "name": "Песня 3",
+    "duration_ms": 183000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Земфира",
+      "id": "ar3"
+     }
+    ],
+    "album": {
+     "id": "al3",
+     "name": "Земфира",
+     "artists": [
+      {
+       "name": "Земфира"
+      }
+     ],
+     "release_date": "1999-10-01",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800003"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-05-05T10:04:00Z",
+   "track": {
+    "id": "t004",
+    "name": "Песня 4",
+    "duration_ms": 184000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Кино",
+      "id": "ar0"
+     }
+    ],
+    "album": {
+     "id": "al0",
+     "name": "Группа крови",
+     "artists": [
+      {
+       "name": "Кино"
+      }
+     ],
+     "release_date": "1988-01-05",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800004"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-06-06T10:05:00Z",
+   "track": {
+    "id": "t005",
+    "name": "Песня 5",
+    "duration_ms": 185000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Аквариум",
+      "id": "ar1"
+     }
+    ],
+    "album": {
+     "id": "al1",
+     "name": "Радио Африка",
+     "artists": [
+      {
+       "name": "Аквариум"
+      }
+     ],
+     "release_date": "1989",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800005"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-07-07T10:06:00Z",
+   "track": {
+    "id": "t006",
+    "name": "Песня 6",
+    "duration_ms": 186000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Metallica",
+      "id": "ar2"
+     }
+    ],
+    "album": {
+     "id": "al2",
+     "name": "Metallica",
+     "artists": [
+      {
+       "name": "Metallica"
+      }
+     ],
+     "release_date": "1991-08-12",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800006"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-08-08T10:07:00Z",
+   "track": {
+    "id": "t007",
+    "name": "Песня 7",
+    "duration_ms": 187000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Земфира",
+      "id": "ar3"
+     }
+    ],
+    "album": {
+     "id": "al3",
+     "name": "Земфира",
+     "artists": [
+      {
+       "name": "Земфира"
+      }
+     ],
+     "release_date": "1999-10-01",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800007"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-09-09T10:08:00Z",
+   "track": {
+    "id": "t008",
+    "name": "Песня 8",
+    "duration_ms": 188000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Кино",
+      "id": "ar0"
+     }
+    ],
+    "album": {
+     "id": "al0",
+     "name": "Группа крови",
+     "artists": [
+      {
+       "name": "Кино"
+      }
+     ],
+     "release_date": "1988-01-05",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800008"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-01-10T10:09:00Z",
+   "track": {
+    "id": "t009",
+    "name": "Песня 9",
+    "duration_ms": 189000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Аквариум",
+      "id": "ar1"
+     }
+    ],
+    "album": {
+     "id": "al1",
+     "name": "Радио Африка",
+     "artists": [
+      {
+       "name": "Аквариум"
+      }
+     ],
+     "release_date": "1989",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800009"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-02-11T10:10:00Z",
+   "track": {
+    "id": "t010",
+    "name": "Песня 10",
+    "duration_ms": 190000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Metallica",
+      "id": "ar2"
+     },
+     {
+      "name": "Гость",
+      "id": "guest"
+     }
+    ],
+    "album": {
+     "id": "al2",
+     "name": "Metallica",
+     "artists": [
+      {
+       "name": "Metallica"
+      }
+     ],
+     "release_date": "1991-08-12",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800010"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-03-12T10:11:00Z",
+   "track": {
+    "id": "t011",
+    "name": "Песня 11",
+    "duration_ms": 191000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Земфира",
+      "id": "ar3"
+     }
+    ],
+    "album": {
+     "id": "al3",
+     "name": "Земфира",
+     "artists": [
+      {
+       "name": "Земфира"
+      }
+     ],
+     "release_date": "1999-10-01",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800011"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-04-13T10:12:00Z",
+   "track": {
+    "id": "t012",
+    "name": "Песня 12",
+    "duration_ms": 192000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Кино",
+      "id": "ar0"
+     }
+    ],
+    "album": {
+     "id": "al0",
+     "name": "Группа крови",
+     "artists": [
+      {
+       "name": "Кино"
+      }
+     ],
+     "release_date": "1988-01-05",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800012"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-05-14T10:13:00Z",
+   "track": {
+    "id": "t013",
+    "name": "Песня 13",
+    "duration_ms": 193000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Аквариум",
+      "id": "ar1"
+     }
+    ],
+    "album": {
+     "id": "al1",
+     "name": "Радио Африка",
+     "artists": [
+      {
+       "name": "Аквариум"
+      }
+     ],
+     "release_date": "1989",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800013"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-06-15T10:14:00Z",
+   "track": {
+    "id": "t014",
+    "name": "Песня 14",
+    "duration_ms": 194000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Metallica",
+      "id": "ar2"
+     }
+    ],
+    "album": {
+     "id": "al2",
+     "name": "Metallica",
+     "artists": [
+      {
+       "name": "Metallica"
+      }
+     ],
+     "release_date": "1991-08-12",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800014"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-07-16T10:15:00Z",
+   "track": {
+    "id": "t015",
+    "name": "Песня 15",
+    "duration_ms": 195000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Земфира",
+      "id": "ar3"
+     }
+    ],
+    "album": {
+     "id": "al3",
+     "name": "Земфира",
+     "artists": [
+      {
+       "name": "Земфира"
+      }
+     ],
+     "release_date": "1999-10-01",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800015"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-08-17T10:16:00Z",
+   "track": {
+    "id": "t016",
+    "name": "Песня 16",
+    "duration_ms": 196000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Кино",
+      "id": "ar0"
+     }
+    ],
+    "album": {
+     "id": "al0",
+     "name": "Группа крови",
+     "artists": [
+      {
+       "name": "Кино"
+      }
+     ],
+     "release_date": "1988-01-05",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800016"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-09-18T10:17:00Z",
+   "track": {
+    "id": "t017",
+    "name": "Песня 17",
+    "duration_ms": 197000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Аквариум",
+      "id": "ar1"
+     }
+    ],
+    "album": {
+     "id": "al1",
+     "name": "Радио Африка",
+     "artists": [
+      {
+       "name": "Аквариум"
+      }
+     ],
+     "release_date": "1989",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800017"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-01-19T10:18:00Z",
+   "track": {
+    "id": "t018",
+    "name": "Песня 18",
+    "duration_ms": 198000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Metallica",
+      "id": "ar2"
+     }
+    ],
+    "album": {
+     "id": "al2",
+     "name": "Metallica",
+     "artists": [
+      {
+       "name": "Metallica"
+      }
+     ],
+     "release_date": "1991-08-12",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800018"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-02-20T10:19:00Z",
+   "track": {
+    "id": "t019",
+    "name": "Песня 19",
+    "duration_ms": 199000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Земфира",
+      "id": "ar3"
+     }
+    ],
+    "album": {
+     "id": "al3",
+     "name": "Земфира",
+     "artists": [
+      {
+       "name": "Земфира"
+      }
+     ],
+     "release_date": "1999-10-01",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800019"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-03-21T10:20:00Z",
+   "track": {
+    "id": "t020",
+    "name": "Песня 20",
+    "duration_ms": 200000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Кино",
+      "id": "ar0"
+     },
+     {
+      "name": "Гость",
+      "id": "guest"
+     }
+    ],
+    "album": {
+     "id": "al0",
+     "name": "Группа крови",
+     "artists": [
+      {
+       "name": "Кино"
+      }
+     ],
+     "release_date": "1988-01-05",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800020"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-04-22T10:21:00Z",
+   "track": {
+    "id": "t021",
+    "name": "Песня 21",
+    "duration_ms": 201000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Аквариум",
+      "id": "ar1"
+     }
+    ],
+    "album": {
+     "id": "al1",
+     "name": "Радио Африка",
+     "artists": [
+      {
+       "name": "Аквариум"
+      }
+     ],
+     "release_date": "1989",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800021"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-05-23T10:22:00Z",
+   "track": {
+    "id": "t022",
+    "name": "Песня 22",
+    "duration_ms": 202000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Metallica",
+      "id": "ar2"
+     }
+    ],
+    "album": {
+     "id": "al2",
+     "name": "Metallica",
+     "artists": [
+      {
+       "name": "Metallica"
+      }
+     ],
+     "release_date": "1991-08-12",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800022"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-06-24T10:23:00Z",
+   "track": {
+    "id": "t023",
+    "name": "Песня 23",
+    "duration_ms": 203000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Земфира",
+      "id": "ar3"
+     }
+    ],
+    "album": {
+     "id": "al3",
+     "name": "Земфира",
+     "artists": [
+      {
+       "name": "Земфира"
+      }
+     ],
+     "release_date": "1999-10-01",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800023"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-07-25T10:24:00Z",
+   "track": {
+    "id": "t024",
+    "name": "Песня 24",
+    "duration_ms": 204000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Кино",
+      "id": "ar0"
+     }
+    ],
+    "album": {
+     "id": "al0",
+     "name": "Группа крови",
+     "artists": [
+      {
+       "name": "Кино"
+      }
+     ],
+     "release_date": "1988-01-05",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800024"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-08-26T10:25:00Z",
+   "track": {
+    "id": "t025",
+    "name": "Песня 25",
+    "duration_ms": 205000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Аквариум",
+      "id": "ar1"
+     }
+    ],
+    "album": {
+     "id": "al1",
+     "name": "Радио Африка",
+     "artists": [
+      {
+       "name": "Аквариум"
+      }
+     ],
+     "release_date": "1989",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800025"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-09-27T10:26:00Z",
+   "track": {
+    "id": "t026",
+    "name": "Песня 26",
+    "duration_ms": 206000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Metallica",
+      "id": "ar2"
+     }
+    ],
+    "album": {
+     "id": "al2",
+     "name": "Metallica",
+     "artists": [
+      {
+       "name": "Metallica"
+      }
+     ],
+     "release_date": "1991-08-12",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800026"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-01-01T10:27:00Z",
+   "track": {
+    "id": "t027",
+    "name": "Песня 27",
+    "duration_ms": 207000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Земфира",
+      "id": "ar3"
+     }
+    ],
+    "album": {
+     "id": "al3",
+     "name": "Земфира",
+     "artists": [
+      {
+       "name": "Земфира"
+      }
+     ],
+     "release_date": "1999-10-01",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800027"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-02-02T10:28:00Z",
+   "track": {
+    "id": "t028",
+    "name": "Песня 28",
+    "duration_ms": 208000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Кино",
+      "id": "ar0"
+     }
+    ],
+    "album": {
+     "id": "al0",
+     "name": "Группа крови",
+     "artists": [
+      {
+       "name": "Кино"
+      }
+     ],
+     "release_date": "1988-01-05",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800028"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-03-03T10:29:00Z",
+   "track": {
+    "id": "t029",
+    "name": "Песня 29",
+    "duration_ms": 209000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Аквариум",
+      "id": "ar1"
+     }
+    ],
+    "album": {
+     "id": "al1",
+     "name": "Радио Африка",
+     "artists": [
+      {
+       "name": "Аквариум"
+      }
+     ],
+     "release_date": "1989",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800029"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-04-04T10:30:00Z",
+   "track": {
+    "id": "t030",
+    "name": "Песня 30",
+    "duration_ms": 210000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Metallica",
+      "id": "ar2"
+     },
+     {
+      "name": "Гость",
+      "id": "guest"
+     }
+    ],
+    "album": {
+     "id": "al2",
+     "name": "Metallica",
+     "artists": [
+      {
+       "name": "Metallica"
+      }
+     ],
+     "release_date": "1991-08-12",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800030"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-05-05T10:31:00Z",
+   "track": {
+    "id": "t031",
+    "name": "Песня 31",
+    "duration_ms": 211000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Земфира",
+      "id": "ar3"
+     }
+    ],
+    "album": {
+     "id": "al3",
+     "name": "Земфира",
+     "artists": [
+      {
+       "name": "Земфира"
+      }
+     ],
+     "release_date": "1999-10-01",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800031"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-06-06T10:32:00Z",
+   "track": {
+    "id": "t032",
+    "name": "Песня 32",
+    "duration_ms": 212000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Кино",
+      "id": "ar0"
+     }
+    ],
+    "album": {
+     "id": "al0",
+     "name": "Группа крови",
+     "artists": [
+      {
+       "name": "Кино"
+      }
+     ],
+     "release_date": "1988-01-05",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800032"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-07-07T10:33:00Z",
+   "track": {
+    "id": "t033",
+    "name": "Песня 33",
+    "duration_ms": 213000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Аквариум",
+      "id": "ar1"
+     }
+    ],
+    "album": {
+     "id": "al1",
+     "name": "Радио Африка",
+     "artists": [
+      {
+       "name": "Аквариум"
+      }
+     ],
+     "release_date": "1989",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800033"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-08-08T10:34:00Z",
+   "track": {
+    "id": "t034",
+    "name": "Песня 34",
+    "duration_ms": 214000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Metallica",
+      "id": "ar2"
+     }
+    ],
+    "album": {
+     "id": "al2",
+     "name": "Metallica",
+     "artists": [
+      {
+       "name": "Metallica"
+      }
+     ],
+     "release_date": "1991-08-12",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800034"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-09-09T10:35:00Z",
+   "track": {
+    "id": "t035",
+    "name": "Песня 35",
+    "duration_ms": 215000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Земфира",
+      "id": "ar3"
+     }
+    ],
+    "album": {
+     "id": "al3",
+     "name": "Земфира",
+     "artists": [
+      {
+       "name": "Земфира"
+      }
+     ],
+     "release_date": "1999-10-01",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800035"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-01-10T10:36:00Z",
+   "track": {
+    "id": "t036",
+    "name": "Песня 36",
+    "duration_ms": 216000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Кино",
+      "id": "ar0"
+     }
+    ],
+    "album": {
+     "id": "al0",
+     "name": "Группа крови",
+     "artists": [
+      {
+       "name": "Кино"
+      }
+     ],
+     "release_date": "1988-01-05",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800036"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-02-11T10:37:00Z",
+   "track": {
+    "id": "t037",
+    "name": "Песня 37",
+    "duration_ms": 217000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Аквариум",
+      "id": "ar1"
+     }
+    ],
+    "album": {
+     "id": "al1",
+     "name": "Радио Африка",
+     "artists": [
+      {
+       "name": "Аквариум"
+      }
+     ],
+     "release_date": "1989",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800037"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-03-12T10:38:00Z",
+   "track": {
+    "id": "t038",
+    "name": "Песня 38",
+    "duration_ms": 218000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Metallica",
+      "id": "ar2"
+     }
+    ],
+    "album": {
+     "id": "al2",
+     "name": "Metallica",
+     "artists": [
+      {
+       "name": "Metallica"
+      }
+     ],
+     "release_date": "1991-08-12",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800038"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-04-13T10:39:00Z",
+   "track": {
+    "id": "t039",
+    "name": "Песня 39",
+    "duration_ms": 219000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Земфира",
+      "id": "ar3"
+     }
+    ],
+    "album": {
+     "id": "al3",
+     "name": "Земфира",
+     "artists": [
+      {
+       "name": "Земфира"
+      }
+     ],
+     "release_date": "1999-10-01",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800039"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-05-14T10:40:00Z",
+   "track": {
+    "id": "t040",
+    "name": "Песня 40",
+    "duration_ms": 220000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Кино",
+      "id": "ar0"
+     },
+     {
+      "name": "Гость",
+      "id": "guest"
+     }
+    ],
+    "album": {
+     "id": "al0",
+     "name": "Группа крови",
+     "artists": [
+      {
+       "name": "Кино"
+      }
+     ],
+     "release_date": "1988-01-05",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800040"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-06-15T10:41:00Z",
+   "track": {
+    "id": "t041",
+    "name": "Песня 41",
+    "duration_ms": 221000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Аквариум",
+      "id": "ar1"
+     }
+    ],
+    "album": {
+     "id": "al1",
+     "name": "Радио Африка",
+     "artists": [
+      {
+       "name": "Аквариум"
+      }
+     ],
+     "release_date": "1989",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800041"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-07-16T10:42:00Z",
+   "track": {
+    "id": "t042",
+    "name": "Песня 42",
+    "duration_ms": 222000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Metallica",
+      "id": "ar2"
+     }
+    ],
+    "album": {
+     "id": "al2",
+     "name": "Metallica",
+     "artists": [
+      {
+       "name": "Metallica"
+      }
+     ],
+     "release_date": "1991-08-12",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800042"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-08-17T10:43:00Z",
+   "track": {
+    "id": "t043",
+    "name": "Песня 43",
+    "duration_ms": 223000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Земфира",
+      "id": "ar3"
+     }
+    ],
+    "album": {
+     "id": "al3",
+     "name": "Земфира",
+     "artists": [
+      {
+       "name": "Земфира"
+      }
+     ],
+     "release_date": "1999-10-01",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800043"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-09-18T10:44:00Z",
+   "track": {
+    "id": "t044",
+    "name": "Песня 44",
+    "duration_ms": 224000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Кино",
+      "id": "ar0"
+     }
+    ],
+    "album": {
+     "id": "al0",
+     "name": "Группа крови",
+     "artists": [
+      {
+       "name": "Кино"
+      }
+     ],
+     "release_date": "1988-01-05",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800044"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-01-19T10:45:00Z",
+   "track": {
+    "id": "t045",
+    "name": "Песня 45",
+    "duration_ms": 225000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Аквариум",
+      "id": "ar1"
+     }
+    ],
+    "album": {
+     "id": "al1",
+     "name": "Радио Африка",
+     "artists": [
+      {
+       "name": "Аквариум"
+      }
+     ],
+     "release_date": "1989",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800045"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-02-20T10:46:00Z",
+   "track": {
+    "id": "t046",
+    "name": "Песня 46",
+    "duration_ms": 226000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Metallica",
+      "id": "ar2"
+     }
+    ],
+    "album": {
+     "id": "al2",
+     "name": "Metallica",
+     "artists": [
+      {
+       "name": "Metallica"
+      }
+     ],
+     "release_date": "1991-08-12",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800046"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-03-21T10:47:00Z",
+   "track": {
+    "id": "t047",
+    "name": "Песня 47",
+    "duration_ms": 227000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Земфира",
+      "id": "ar3"
+     }
+    ],
+    "album": {
+     "id": "al3",
+     "name": "Земфира",
+     "artists": [
+      {
+       "name": "Земфира"
+      }
+     ],
+     "release_date": "1999-10-01",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800047"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-04-22T10:48:00Z",
+   "track": {
+    "id": "t048",
+    "name": "Песня 48",
+    "duration_ms": 228000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Кино",
+      "id": "ar0"
+     }
+    ],
+    "album": {
+     "id": "al0",
+     "name": "Группа крови",
+     "artists": [
+      {
+       "name": "Кино"
+      }
+     ],
+     "release_date": "1988-01-05",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800048"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-05-23T10:49:00Z",
+   "track": {
+    "id": "t049",
+    "name": "Песня 49",
+    "duration_ms": 229000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Аквариум",
+      "id": "ar1"
+     }
+    ],
+    "album": {
+     "id": "al1",
+     "name": "Радио Африка",
+     "artists": [
+      {
+       "name": "Аквариум"
+      }
+     ],
+     "release_date": "1989",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800049"
+    },
+    "is_local": false
+   }
+  },
+  {
+   "added_at": "2026-06-24T10:50:00Z",
+   "track": {
+    "id": "t050",
+    "name": "Песня 50",
+    "duration_ms": 230000,
+    "type": "track",
+    "artists": [
+     {
+      "name": "Metallica",
+      "id": "ar2"
+     },
+     {
+      "name": "Гость",
+      "id": "guest"
+     }
+    ],
+    "album": {
+     "id": "al2",
+     "name": "Metallica",
+     "artists": [
+      {
+       "name": "Metallica"
+      }
+     ],
+     "release_date": "1991-08-12",
+     "release_date_precision": "day"
+    },
+    "external_ids": {
+     "isrc": "RUA1D8800050"
+    },
+    "is_local": false
+   }
+  }
+ ]
+}

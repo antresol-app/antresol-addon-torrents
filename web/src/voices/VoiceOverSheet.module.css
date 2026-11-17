@@ -1,0 +1,182 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-2h) 0;
+}
+.row + .row {
+  border-top: 1px solid var(--separator);
+}
+.line {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3h);
+  min-height: var(--control-h-md);
+}
+.text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-0);
+}
+.studio {
+  font: var(--t-group);
+  color: var(--label);
+}
+/* the release name: one line, the rest in its tooltip */
+.release {
+  overflow: hidden;
+  font: var(--t-footnote);
+  color: var(--label-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-1h);
+  font: var(--t-footnote);
+  font-variant-numeric: tabular-nums;
+  color: var(--label-2);
+}
+.meta > span + span::before {
+  content: '·';
+  margin-right: var(--s-1h);
+  color: var(--label-3);
+}
+.section {
+  margin-top: 18px;
+}
+.heading {
+  font: 600 13px / 1.3 var(--font-text);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--label-2);
+}
+.hint {
+  margin: var(--s-1) 0 var(--s-1h);
+  font: var(--t-footnote);
+  color: var(--label-3);
+}
+.note {
+  font: var(--t-footnote);
+  color: var(--label-2);
+}
+.problem {
+  font: var(--t-footnote);
+  color: var(--warning);
+}
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+/* a native-looking linear progress view */
+.bar {
+  overflow: hidden;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--fill-2);
+}
+.bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width 0.4s ease;
+}
+.result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+.result .meta svg {
+  color: var(--success);
+}
+.episodes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--s-0) var(--s-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: var(--t-footnote);
+  font-variant-numeric: tabular-nums;
+  color: var(--label-2);
+}
+.episodes li {
+  display: flex;
+  gap: var(--s-2);
+}
+.code {
+  flex: none;
+  min-width: 48px;
+  font-weight: 600;
+  color: var(--label);
+}
+.good > span:last-child {
+  color: var(--success);
+}
+.bad > span:last-child {
+  color: var(--warning);
+}
+.state {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2h);
+  padding: 18px 0;
+  font: var(--t-subhead);
+  color: var(--label-2);
+}
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--fill-1);
+  border-top-color: var(--label-2);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+.state .spinner {
+  width: 18px;
+  height: 18px;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 28px var(--s-3) var(--s-5);
+  text-align: center;
+  font: var(--t-subhead);
+  color: var(--label-2);
+}
+.empty svg {
+  color: var(--label-3);
+}
+.emptyTitle {
+  font-weight: 600;
+  color: var(--label);
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+  .bar > span {
+    transition: none;
+  }
+}

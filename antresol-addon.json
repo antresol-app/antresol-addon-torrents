@@ -1,0 +1,60 @@
+{
+  "id": "torrents",
+  "name": {
+    "ru": "Торренты",
+    "en": "Torrents"
+  },
+  "description": {
+    "ru": "Поиск и загрузка раздач, источники, торрент-движок",
+    "en": "Searching and downloading releases, sources, the torrent engine"
+  },
+  "version": "0.4.0",
+  "author": "Antresol",
+  "homepage": "",
+  "contract": 1,
+  "platforms": {},
+  "access": "adults",
+  "permissions": [
+    "library.read",
+    "library.write",
+    "files.holds",
+    "metadata",
+    "images",
+    "users.read",
+    "events",
+    "play",
+    "notify",
+    "requests",
+    "tracking",
+    "voiceover"
+  ],
+  "hooks": [
+    "files.plan",
+    "files.pause",
+    "files.resume",
+    "files.stop",
+    "files.detach",
+    "files.attach",
+    "library.pending",
+    "disk.usage",
+    "requests.open",
+    "requests.title",
+    "requests.search",
+    "tracking.scan:pinned",
+    "tracking.scan:torrent",
+    "tracking.titles",
+    "notify.interest",
+    "voiceover.origLang",
+    "migrate.leftovers"
+  ],
+  "notify": [
+    {
+      "topic": "downloads",
+      "title": {
+        "ru": "Загрузки",
+        "en": "Downloads"
+      },
+      "audience": "admins"
+    }
+  ]
+}

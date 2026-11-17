@@ -1,0 +1,80 @@
+{
+  "kind": "youtube#playlistItemListResponse",
+  "etag": "e",
+  "items": [
+    {
+      "kind": "youtube#playlistItem",
+      "etag": "e",
+      "id": "LL-0",
+      "snippet": {
+        "publishedAt": "2026-03-01T10:00:00Z",
+        "channelId": "UCme0000000000000000000",
+        "title": "Группа крови",
+        "description": "",
+        "channelTitle": "Слушатель",
+        "videoOwnerChannelTitle": "Кино - Topic",
+        "playlistId": "LL",
+        "position": 0,
+        "resourceId": {
+          "kind": "youtube#video",
+          "videoId": "kinoBlood01"
+        }
+      },
+      "contentDetails": {
+        "videoId": "kinoBlood01",
+        "videoPublishedAt": "2015-01-01T00:00:00Z"
+      }
+    },
+    {
+      "kind": "youtube#playlistItem",
+      "etag": "e",
+      "id": "LL-1",
+      "snippet": {
+        "publishedAt": "2026-02-28T10:00:00Z",
+        "channelId": "UCme0000000000000000000",
+        "title": "Мой день в Москве",
+        "description": "",
+        "channelTitle": "Слушатель",
+        "videoOwnerChannelTitle": "Блогер",
+        "playlistId": "LL",
+        "position": 1,
+        "resourceId": {
+          "kind": "youtube#video",
+          "videoId": "vlogVideo01"
+        }
+      },
+      "contentDetails": {
+        "videoId": "vlogVideo01",
+        "videoPublishedAt": "2015-01-01T00:00:00Z"
+      }
+    },
+    {
+      "kind": "youtube#playlistItem",
+      "etag": "e",
+      "id": "LL-2",
+      "snippet": {
+        "publishedAt": "2026-02-27T10:00:00Z",
+        "channelId": "UCme0000000000000000000",
+        "title": "Metallica - Sad But True (Official Music Video)",
+        "description": "",
+        "channelTitle": "Слушатель",
+        "videoOwnerChannelTitle": "Metallica",
+        "playlistId": "LL",
+        "position": 2,
+        "resourceId": {
+          "kind": "youtube#video",
+          "videoId": "metSadTrue1"
+        }
+      },
+      "contentDetails": {
+        "videoId": "metSadTrue1",
+        "videoPublishedAt": "2015-01-01T00:00:00Z"
+      }
+    }
+  ],
+  "pageInfo": {
+    "totalResults": 5,
+    "resultsPerPage": 50
+  },
+  "nextPageToken": "LLpage2"
+}

@@ -1,0 +1,10 @@
+/* a secondary line, like a footnote: the reason, then the way out — a link
+   on the same line of text */
+.note {
+  max-width: 60ch;
+  font: var(--t-footnote);
+  color: var(--label-2);
+}
+.note .action {
+  margin-left: var(--s-1);
+}

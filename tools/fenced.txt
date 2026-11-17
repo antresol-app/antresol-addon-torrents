@@ -1,0 +1,26 @@
+# Files fenced with //go:build ignore (TestFence: exactly these). Each
+# later sub-plan deletes its lines as it wires them.
+
+# a later stage: musicimport
+internal/musicimport/catalog.go
+internal/musicimport/connect/deezer_test.go
+internal/musicimport/connect/deezer.go
+internal/musicimport/connect/spotify_test.go
+internal/musicimport/connect/spotify.go
+internal/musicimport/connect/yandex_test.go
+internal/musicimport/connect/yandex.go
+internal/musicimport/connect/youtube_test.go
+internal/musicimport/connect/youtube.go
+internal/musicimport/helpers_test.go
+internal/musicimport/oauth_test.go
+internal/musicimport/oauth.go
+internal/musicimport/queue_store.go
+internal/musicimport/queue_test.go
+internal/musicimport/queue.go
+internal/musicimport/services.go
+internal/musicimport/tokens_test.go
+internal/musicimport/tokens.go
+
+# the reference for the migrate and import routes (the rest is deleted)
+legacy/api/import_handlers_full.go
+legacy/api/import_handlers_moved_test.go

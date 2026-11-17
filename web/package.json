@@ -1,0 +1,16 @@
+{
+  "name": "antresol-addon-torrents-web",
+  "private": true,
+  "version": "0.0.0",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && vite build"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "react-router": "^7.18.5",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.5"
+  }
+}

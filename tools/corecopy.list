@@ -1,0 +1,42 @@
+# The core helper files internal/corecopy/ holds (tools/corecopy.sh): globs
+# relative to the core's internal/, test files never copied. Never
+# events/types_full.go or library/torrent_full.go: the addon names its own
+# event types and keeps no torrent methods on the library.
+release/*.go
+version/*.go
+sqlitesnap/*.go
+natsort/*.go
+comics/*.go
+events/bus.go
+disk/*.go
+# i18n: the machinery, and the English of the copied helpers that call it
+# (releaseprefs; lang's language names are in the library catalog)
+i18n/i18n.go i18n/catalog.go
+i18n/catalog_en_releaseprefs.go i18n/catalog_en_library.go
+lang/*.go
+releaseprefs/*.go
+media/probe.go media/input.go
+library/model.go library/image_url.go library/errors.go library/rating.go
+# the tracked titles' model (pinned, follow) without the core's Service
+# and Store, which need its database: pinned names its own Scanner
+tracking/model.go
+# the scanners' file rules (organize lays files out for them, acquire
+# reads release files with them) without the scanners: filetypes.go and
+# the files its rules and AlbumTag build on
+library/filetypes.go library/scan_rules.go library/folders.go library/cue.go library/replaygain.go
+metadata/*.go
+metadata/wikidata/*.go
+# The metadata clients without their library enrichers (enrich.go and
+# what builds on it: tmdb photos.go/translations.go; of subtitles only
+# the sidecar helpers, the client needs auto.go):
+# those work on library.Repo, which the addon replaces with its library
+# adapter over addonkit, so they are not copied.
+metadata/tmdb/client.go metadata/tmdb/genres.go metadata/tmdb/related.go metadata/tmdb/videos.go metadata/tmdb/discover_full.go
+metadata/musicbrainz/artist.go metadata/musicbrainz/catalog.go metadata/musicbrainz/client.go metadata/musicbrainz/match.go metadata/musicbrainz/names.go
+metadata/openlibrary/client.go
+subtitles/sidecar.go
+extaudio/*.go
+# the leaf types of the playlist import and the migration: musicimport
+# and migrate import them under the old names, playlistimport and mediaimport
+playlistimport/model/*.go
+mediaimport/runkit/*.go

@@ -1,0 +1,39 @@
+{
+ "href": "",
+ "limit": 50,
+ "offset": 0,
+ "total": 2,
+ "next": null,
+ "items": [
+  {
+   "added_at": "2026-03-01T09:00:00Z",
+   "album": {
+    "id": "alb1",
+    "name": "Группа крови",
+    "album_type": "album",
+    "artists": [
+     {
+      "name": "Кино"
+     }
+    ],
+    "release_date": "1988-01-05",
+    "total_tracks": 11
+   }
+  },
+  {
+   "added_at": "2026-02-01T09:00:00Z",
+   "album": {
+    "id": "alb2",
+    "name": "Metallica",
+    "album_type": "album",
+    "artists": [
+     {
+      "name": "Metallica"
+     }
+    ],
+    "release_date": "1991",
+    "total_tracks": 12
+   }
+  }
+ ]
+}

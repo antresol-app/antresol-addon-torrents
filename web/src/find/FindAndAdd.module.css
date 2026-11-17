@@ -1,0 +1,184 @@
+/* «Найти и добавить» under «Поиск»'s library results: a trimmed copy of the
+   core's pages/Search.module.css (only what this block draws). */
+.section {
+  margin-top: var(--section-gap);
+}
+.sectionTitle {
+  font: var(--t-title-2);
+  letter-spacing: var(--track-display);
+  margin-bottom: var(--s-4);
+}
+.discoverHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: var(--s-3) var(--s-5);
+  margin-bottom: var(--s-4);
+}
+.discoverHeader .sectionTitle {
+  margin-bottom: 0;
+}
+/* where «Найти и добавить» looks: the page's filter decides, this says it */
+.discoverWhere {
+  font: var(--t-subhead);
+  color: var(--label-2);
+}
+.byline {
+  font: var(--t-subhead);
+  color: var(--label-2);
+}
+/* music found by a song title: which song the album holds */
+.matched {
+  font: var(--t-footnote);
+  color: var(--label-2);
+}
+/* music whose query names an artist: «Альбомы …», then «Другие совпадения» */
+.candidateGroup + .candidateGroup {
+  margin-top: var(--s-6);
+}
+.groupTitle {
+  font: var(--t-headline);
+  color: var(--label-2);
+  margin: 0 0 var(--s-3);
+}
+.candidates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 480px), 1fr));
+  gap: var(--s-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* a catalog result: the page's one card (ui/Card), as the top result is */
+.candidate {
+  /* ui/Card's card sm, inlined (an addon's stylesheet cannot compose the core's) */
+  border-radius: var(--r-group);
+  background: var(--surface-grouped);
+  border: var(--hairline-w) solid var(--surface-grouped-border);
+  list-style: none;
+  padding: var(--s-3);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  gap: 0 var(--s-4);
+}
+.poster {
+  grid-row: span 2;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 104px;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--r-card-sm);
+  overflow: hidden;
+  background: var(--fill-3);
+  color: var(--label-3);
+  align-self: flex-start;
+}
+.poster.square {
+  aspect-ratio: 1;
+}
+.poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--s-1);
+  padding-top: var(--s-0);
+}
+.kicker {
+  font: var(--t-caption);
+  color: var(--label-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.name {
+  font: var(--t-headline);
+  align-self: flex-start;
+}
+.name:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.overview {
+  font: var(--t-footnote);
+  color: var(--label-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.footer {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--s-1h);
+  min-width: 0;
+}
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  padding-top: var(--s-2h);
+}
+.note,
+.muted {
+  font: var(--t-footnote);
+  color: var(--label-2);
+}
+.done {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-1h);
+  font: var(--t-footnote);
+  color: var(--success);
+}
+.done svg {
+  flex: none;
+  margin-top: 1px;
+}
+.problem {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font: var(--t-footnote);
+  color: var(--warning);
+  margin-bottom: var(--s-2);
+}
+.skeletonLine {
+  background: var(--fill-3);
+  animation: pulse 1.6s var(--ease-in-out) infinite;
+}
+.skeletonLine {
+  height: 12px;
+  border-radius: var(--r-sm);
+  margin-top: var(--s-1h);
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton,
+  .skeletonLine {
+    animation: none;
+  }
+}
+@media (max-width: 699px) {
+  .poster {
+    width: 84px;
+    grid-row: auto;
+  }
+  .footer {
+    grid-column: 1 / -1;
+  }
+  .candidate {
+    gap: var(--s-3);
+  }
+}

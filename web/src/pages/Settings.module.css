@@ -1,0 +1,9 @@
+/* «Настройки загрузок»: the width of the core's settings page; a warning
+   icon in a row's label. Tokens only (web/DESIGN.md). */
+.page {
+  max-width: 760px;
+}
+.warnIcon {
+  vertical-align: -2px;
+  color: var(--warning);
+}

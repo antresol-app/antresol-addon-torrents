@@ -1,0 +1,4 @@
+{"data":[
+{"id":3135559,"readable":true,"title":"Кукушка","title_short":"Кукушка","title_version":"","duration":399,"time_add":1700000300,"artist":{"id":1001,"name":"Кино","type":"artist"},"album":{"id":2004,"title":"Чёрный альбом","type":"album"},"type":"track"},
+{"id":3135560,"readable":true,"title":"Хочешь?","title_short":"Хочешь?","title_version":"","duration":240,"time_add":1700000400,"artist":{"id":1004,"name":"Земфира","type":"artist"},"album":{"id":2005,"title":"Прости меня моя любовь","type":"album"},"type":"track"}
+],"total":5,"prev":"https://api.deezer.com/user/me/tracks?access_token=frDeezerFakeAccessToken&index=0&limit=100"}

@@ -1,0 +1,58 @@
+package strings
+
+import . "github.com/antresol-app/antresol-addon-torrents/internal/corecopy/i18n"
+
+// Keys of the full build's admin API (follows, import, migration, release
+// preferences, sources, «Найти и добавить», torrent files in «Файлы»,
+// a torrent stream's subtitle files).
+func init() {
+	Register(EN, map[string]string{
+		"Файл субтитров слишком большой": "The subtitle file is too large",
+		"Не удалось прочитать субтитры":  "Couldn’t read the subtitles",
+		"Не удалось остановить раздачу этих файлов, поэтому они остались на месте. Попробуйте ещё раз": "Couldn’t stop seeding these files, so they stayed where they were. Try again",
+		"%s. Файлы остались на месте":                                "%s. The files stayed where they were",
+		"Раздача «%s» прекратится":                                   "Seeding of “%s” will stop",
+		"Раздача «%s» продолжится: в ней есть и другое из медиатеки": "Seeding of “%s” will go on: it also holds other things in the library",
+		"Загрузки":      "Downloads",
+		"Кеш просмотра": "Streaming Cache",
+		"Следить можно только за фильмом или сериалом":                                                                     "Only a movie or a TV show can be followed",
+		"Слежение выключено":                                                                                               "Following is off",
+		"Нет связи с TMDB. Попробуйте позже":                                                                               "Can’t reach TMDB. Try again later",
+		"Это слежение добавил другой профиль":                                                                              "Another profile added this follow",
+		"Не указано, включить ли слежение":                                                                                 "It isn’t specified whether to turn following on",
+		"Откройте developer.spotify.com/dashboard и нажмите «Create app».":                                                 "Open developer.spotify.com/dashboard and click “Create app”.",
+		"В «APIs used» отметьте «Web API».":                                                                                "Under “APIs used”, check “Web API”.",
+		"Redirect URI: <адрес Antresol>/api/import/oauth/spotify/callback или http://127.0.0.1:8765/vault-import/spotify.": "Redirect URI: <Antresol address>/api/import/oauth/spotify/callback or http://127.0.0.1:8765/vault-import/spotify.",
+		"В Settings → «User Management» добавьте e-mail аккаунта Spotify, из которого переносите медиатеку.":               "In Settings → “User Management”, add the e-mail of the Spotify account you’re moving the library from.",
+		"Скопируйте Client ID в переменную VAULT_SPOTIFY_CLIENT_ID на сервере и перезапустите Antresol.":                   "Copy the Client ID into the VAULT_SPOTIFY_CLIENT_ID variable on the server and restart Antresol.",
+		"Подключайтесь, открыв Antresol по адресу из VAULT_PUBLIC_URL: после входа Spotify вернёт браузер туда, и вход в Antresol должен быть на том же адресе.":          "Connect with Antresol opened at the VAULT_PUBLIC_URL address: after sign-in Spotify returns the browser there, and you must be signed in to Antresol at that same address.",
+		"Возьмите client_id и client_secret публичного клиента Яндекс Музыки для Android — они перечислены в библиотеке MarshalX/yandex-music-api (файл device_auth.py).": "Take the client_id and client_secret of the public Yandex Music client for Android — they’re listed in the MarshalX/yandex-music-api library (the device_auth.py file).",
+		"Впишите их в переменные VAULT_YANDEX_CLIENT_ID и VAULT_YANDEX_CLIENT_SECRET на сервере и перезапустите Antresol.":                                                "Put them into the VAULT_YANDEX_CLIENT_ID and VAULT_YANDEX_CLIENT_SECRET variables on the server and restart Antresol.",
+		"Откройте console.cloud.google.com и создайте проект.": "Open console.cloud.google.com and create a project.",
+		"В «APIs & Services» включите «YouTube Data API v3».":  "Under “APIs & Services”, enable “YouTube Data API v3”.",
+		"В «OAuth consent screen» выберите External и режим Testing, добавьте свой аккаунт Google в тестовые пользователи и доступ …/auth/youtube.readonly.":                                                           "On the “OAuth consent screen”, choose External and the Testing mode, add your Google account as a test user and the …/auth/youtube.readonly scope.",
+		"В «Credentials» нажмите «Create OAuth client ID»: без VAULT_PUBLIC_URL — тип Desktop app; с VAULT_PUBLIC_URL — Web application с Authorized redirect URI <адрес Antresol>/api/import/oauth/youtube/callback.": "Under “Credentials”, click “Create OAuth client ID”: without VAULT_PUBLIC_URL — the Desktop app type; with VAULT_PUBLIC_URL — Web application with the Authorized redirect URI <Antresol address>/api/import/oauth/youtube/callback.",
+		"Впишите Client ID и Client secret в переменные VAULT_GOOGLE_CLIENT_ID и VAULT_GOOGLE_CLIENT_SECRET на сервере и перезапустите Antresol.":                                                                      "Put the Client ID and Client secret into the VAULT_GOOGLE_CLIENT_ID and VAULT_GOOGLE_CLIENT_SECRET variables on the server and restart Antresol.",
+		"При входе Google предупредит «Google hasn’t verified this app»: это ваше приложение — нажмите «Continue».":                                                                                                    "When you sign in, Google warns “Google hasn’t verified this app”: it’s your own app — click “Continue”.",
+		"Откройте developers.deezer.com/myapps и нажмите «Create a new Application».":                                                                                                                                  "Open developers.deezer.com/myapps and click “Create a new Application”.",
+		"Домен — адрес Antresol или 127.0.0.1; «Redirect URL after authentication» — <адрес Antresol>/api/import/oauth/deezer/callback или http://127.0.0.1:8765/vault-import/deezer.":                                 "Domain — the Antresol address or 127.0.0.1; “Redirect URL after authentication” — <Antresol address>/api/import/oauth/deezer/callback or http://127.0.0.1:8765/vault-import/deezer.",
+		"Впишите Application ID в переменную VAULT_DEEZER_APP_ID, Secret Key — в VAULT_DEEZER_SECRET на сервере и перезапустите Antresol.":                                                                             "Put the Application ID into the VAULT_DEEZER_APP_ID variable and the Secret Key into VAULT_DEEZER_SECRET on the server, and restart Antresol.",
+		"В этом отчёте нет перенесённых раздач":                                                                                                                                                                        "This report has no moved torrents",
+		"Раздачи из этого переноса уже возвращены":                                                                                                                                                                     "The torrents of this migration have already been returned",
+		"Сначала остановите Sonarr и Radarr":            "Stop Sonarr and Radarr first",
+		"Число загрузок изменилось — проверьте ещё раз": "The number of downloads has changed — check again",
+		"Сейчас включать рано — %s":                     "It’s too early to switch on — %s",
+		"Для слежения нужен ключ TMDB":                  "Following needs a TMDB key",
+		"Выберите качество: 720p, 1080p или 4K":         "Choose the quality: 720p, 1080p or 4K",
+		"Выберите озвучку: русская или оригинал":        "Choose the audio: Russian dub or original",
+		"Размер фильма — от 0 до 1000 ГБ":               "Movie size must be from 0 to 1000 GB",
+		"Кеш просмотра — от 1 ГБ":                       "The streaming cache must be at least 1 GB",
+		"Укажите скорость отдачи больше нуля":           "Enter an upload speed greater than zero",
+		"Неизвестный язык":                              "Unknown language",
+		"Источник не найден":                            "Torrent source not found",
+		"Описание этого трекера не найдено":             "This tracker’s definition wasn’t found",
+		"Недоступно в детском профиле":                  "Not available in a kid profile",
+		"Слишком много одновременных потоков":           "Too many simultaneous streams",
+		"Не удалось прочитать видео из раздачи. Возможно, она ещё не начала загружаться": "Couldn’t read the video from the torrent. It may not have started downloading yet",
+	})
+}

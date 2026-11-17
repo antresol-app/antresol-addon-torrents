@@ -1,0 +1,1 @@
+internal/studios/studios.go: резка  # a spelling matched in release names of a voice-over studio (parser data)

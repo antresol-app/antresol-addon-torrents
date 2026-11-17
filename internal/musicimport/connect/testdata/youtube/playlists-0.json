@@ -1,0 +1,39 @@
+{
+  "kind": "youtube#playlistListResponse",
+  "etag": "e",
+  "nextPageToken": "plPage2",
+  "pageInfo": {
+    "totalResults": 3,
+    "resultsPerPage": 50
+  },
+  "items": [
+    {
+      "kind": "youtube#playlist",
+      "etag": "e",
+      "id": "PLroad",
+      "snippet": {
+        "publishedAt": "2025-01-01T00:00:00Z",
+        "title": "Дорога",
+        "description": "",
+        "channelTitle": "Слушатель"
+      },
+      "contentDetails": {
+        "itemCount": 5
+      }
+    },
+    {
+      "kind": "youtube#playlist",
+      "etag": "e",
+      "id": "PLvlog",
+      "snippet": {
+        "publishedAt": "2025-01-01T00:00:00Z",
+        "title": "Влоги",
+        "description": "",
+        "channelTitle": "Слушатель"
+      },
+      "contentDetails": {
+        "itemCount": 1
+      }
+    }
+  ]
+}

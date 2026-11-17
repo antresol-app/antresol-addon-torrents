@@ -1,0 +1,107 @@
+{
+ "invocationInfo": {
+  "hostname": "music-stable-back-vla-1",
+  "req-id": "1730000000000000-1",
+  "exec-duration-millis": 3
+ },
+ "result": {
+  "uid": 1130000,
+  "kind": 1001,
+  "title": "Дорога",
+  "trackCount": 3,
+  "revision": 5,
+  "owner": {
+   "uid": 1130000,
+   "login": "listener",
+   "name": "listener",
+   "sex": "unknown",
+   "verified": false
+  },
+  "tracks": [
+   {
+    "id": 1003,
+    "originalIndex": 0,
+    "timestamp": "2025-01-02T00:00:00+00:00",
+    "track": {
+     "id": "1003",
+     "realId": "1003",
+     "title": "Песня 3",
+     "durationMs": 180003,
+     "available": true,
+     "lyricsAvailable": false,
+     "artists": [
+      {
+       "id": 102,
+       "name": "Алиса",
+       "various": false,
+       "composer": false
+      }
+     ],
+     "albums": [
+      {
+       "id": 5002,
+       "title": "Энергия",
+       "year": 1990,
+       "genre": "rusrock",
+       "trackCount": 10,
+       "artists": [
+        {
+         "id": 102,
+         "name": "Алиса"
+        }
+       ],
+       "trackPosition": {
+        "volume": 1,
+        "index": 3
+       }
+      }
+     ]
+    }
+   },
+   {
+    "id": 9001,
+    "originalIndex": 1,
+    "timestamp": "2025-01-03T00:00:00+00:00"
+   },
+   {
+    "id": 1001,
+    "originalIndex": 2,
+    "timestamp": "2025-01-04T00:00:00+00:00",
+    "track": {
+     "id": "1001",
+     "realId": "1001",
+     "title": "Song",
+     "durationMs": 180001,
+     "available": true,
+     "lyricsAvailable": false,
+     "artists": [
+      {
+       "id": 7,
+       "name": "Metallica"
+      }
+     ],
+     "albums": [
+      {
+       "id": 7001,
+       "title": "S&M",
+       "year": 1999,
+       "genre": "rusrock",
+       "trackCount": 10,
+       "artists": [
+        {
+         "id": 7,
+         "name": "Metallica"
+        }
+       ],
+       "trackPosition": {
+        "volume": 1,
+        "index": 1
+       }
+      }
+     ],
+     "version": "Live"
+    }
+   }
+  ]
+ }
+}

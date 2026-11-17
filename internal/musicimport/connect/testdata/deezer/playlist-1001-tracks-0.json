@@ -1,0 +1,4 @@
+{"data":[
+{"id":3135559,"readable":true,"title":"Кукушка","title_short":"Кукушка","title_version":"","duration":399,"time_add":1680000400,"artist":{"id":1001,"name":"Кино","type":"artist"},"album":{"id":2004,"title":"Чёрный альбом","type":"album"},"type":"track"},
+{"id":4000001,"readable":true,"title":"Город золотой","title_short":"Город золотой","title_version":"","duration":201,"time_add":1680000500,"artist":{"id":1005,"name":"Аквариум","type":"artist"},"album":{"id":2006,"title":"Десять стрел","type":"album"},"type":"track"}
+],"total":3,"next":"https://api.deezer.com/playlist/1001/tracks?index=2&limit=100"}

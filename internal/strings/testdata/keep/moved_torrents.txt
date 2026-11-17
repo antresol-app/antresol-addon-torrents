@@ -1,0 +1,6 @@
+# Keep rules of the torrent family's files that sat in the core's moved.txt
+# (a list the public core leaves out); they leave with the family. Same
+# format as the others.
+
+internal/musicimport/connect/youtube.go  # regex of Russian noise words in YouTube video titles (parser data)
+internal/migrate/arr.go: Тип «  # prefix matched in the indexer package's reason text (data, not shown)

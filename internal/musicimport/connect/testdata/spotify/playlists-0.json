@@ -1,0 +1,61 @@
+{
+ "href": "",
+ "limit": 50,
+ "offset": 0,
+ "total": 4,
+ "next": null,
+ "items": [
+  {
+   "id": "road",
+   "name": "Дорога",
+   "collaborative": false,
+   "public": false,
+   "owner": {
+    "id": "me123",
+    "display_name": "Слушатель"
+   },
+   "items": {
+    "href": "https://api.spotify.com/v1/playlists/road/items",
+    "total": 5
+   }
+  },
+  {
+   "id": "shared",
+   "name": "Общий",
+   "collaborative": true,
+   "public": false,
+   "owner": {
+    "id": "friend",
+    "display_name": "Друг"
+   },
+   "tracks": {
+    "href": "https://api.spotify.com/v1/playlists/shared/tracks",
+    "total": 2
+   }
+  },
+  {
+   "id": "followed",
+   "name": "Чужой плейлист",
+   "collaborative": false,
+   "public": true,
+   "owner": {
+    "id": "spotify",
+    "display_name": "Spotify"
+   }
+  },
+  {
+   "id": "friendmix",
+   "name": "Микс друга",
+   "collaborative": false,
+   "public": true,
+   "owner": {
+    "id": "friend",
+    "display_name": "Друг"
+   },
+   "items": {
+    "href": "https://api.spotify.com/v1/playlists/friendmix/items",
+    "total": 5
+   }
+  }
+ ]
+}

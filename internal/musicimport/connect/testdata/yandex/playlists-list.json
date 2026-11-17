@@ -1,0 +1,42 @@
+{
+ "invocationInfo": {
+  "hostname": "music-stable-back-vla-1",
+  "req-id": "1730000000000000-1",
+  "exec-duration-millis": 3
+ },
+ "result": [
+  {
+   "uid": 1130000,
+   "kind": 1001,
+   "title": "Дорога",
+   "trackCount": 3,
+   "revision": 5,
+   "visibility": "public",
+   "owner": {
+    "uid": 1130000,
+    "login": "listener",
+    "name": "listener",
+    "sex": "unknown",
+    "verified": false
+   },
+   "created": "2025-01-01T00:00:00+00:00",
+   "modified": "2026-10-01T00:00:00+00:00",
+   "durationMs": 600000
+  },
+  {
+   "uid": 1130000,
+   "kind": 1002,
+   "title": "Удалённый",
+   "trackCount": 2,
+   "revision": 1,
+   "visibility": "private",
+   "owner": {
+    "uid": 1130000,
+    "login": "listener",
+    "name": "listener",
+    "sex": "unknown",
+    "verified": false
+   }
+  }
+ ]
+}
