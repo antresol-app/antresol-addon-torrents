@@ -5,10 +5,9 @@ import styles from './Follows.module.css'
 
 export function MyFollows() {
   return (
-    <div className={styles.page}>
-      <div className={styles.pageColumn}>
-        <Follows mine />
-      </div>
+    // the app draws the page's frame (contract: «routes»)
+    <div className={styles.pageColumn}>
+      <Follows mine />
     </div>
   )
 }
