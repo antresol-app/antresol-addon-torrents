@@ -1,8 +1,9 @@
 // The addon's panel under the action row of an item's and a title's page
 // (itemPanels; on a title page `item.id` is 0 and `title` the TMDB title):
-// «Докачивать новые» / «Скачать, когда выйдет» (the follow from x/follow/
-// by-tmdb), the household's pinned release, a stalled download's note,
-// and on a library series «Добавить сезон…» (admins). Moved from the core's
+// the household's pinned release, a stalled download's note, and on a
+// library series «Добавить сезон…» (admins); «Докачивать новые» / «Скачать,
+// когда выйдет» (the follow from x/follow/by-tmdb) is FollowTile, a button
+// of the action row itself (`inRow`). Moved from the core's
 // ItemDetailFull.tsx. The core draws none of
 // it for a kid. The watch and download sheets of a title off the library
 // are the addon's item actions (WatchSheet, DownloadSheet).
@@ -280,18 +281,28 @@ function TitleDownload({ kind, tmdbId, title }: { kind: TitleKind; tmdbId: numbe
   )
 }
 
-/** The panel (itemPanels): what of it applies to this page. */
-export function TitlePanels({ item, title }: { item: ItemDetail; title?: TitleInfo }) {
+/**
+ * «Следить» (itemPanels, `inRow`): a button of the action row, a tile on a
+ * phone, among the core's and the addon's own buttons (not under the row).
+ */
+export function FollowTile({ item, title }: { item: ItemDetail; title?: TitleInfo }) {
   const user = useUser()
   if (!user || user.isKid) return null
   const follow = followTarget(item, title)
+  if (!follow) return null
+  return <FollowButton key={`${follow.kind}-${follow.tmdbId}`} kind={follow.kind} tmdbId={follow.tmdbId} />
+}
+
+/** The panel under the action row (itemPanels): what of it applies to this page. */
+export function TitlePanels({ item, title }: { item: ItemDetail; title?: TitleInfo }) {
+  const user = useUser()
+  if (!user || user.isKid) return null
   const pin = pinTarget(item, title)
   const onTitle = item.id === 0 && Boolean(title)
   const addSeason = item.id > 0 && item.kind === 'series' && (item.tmdbId ?? 0) > 0 && user.isAdmin
-  if (!follow && !pin && !addSeason) return null
+  if (!pin && !addSeason) return null
   return (
     <div className={styles.panel}>
-      {follow && <FollowButton key={`${follow.kind}-${follow.tmdbId}`} kind={follow.kind} tmdbId={follow.tmdbId} />}
       {addSeason && <AddSeason item={item} tmdbId={item.tmdbId!} />}
       {onTitle && pin && title && <TitleDownload kind={pin.kind} tmdbId={pin.tmdbId} title={title} />}
       {pin && <PinnedPanel key={`${pin.kind}-${pin.tmdbId}`} kind={pin.kind} tmdbId={pin.tmdbId} name={item.title} poster={item.poster} />}

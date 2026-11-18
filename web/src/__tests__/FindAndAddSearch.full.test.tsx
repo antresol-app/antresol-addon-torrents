@@ -6,6 +6,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { MemoryRouter, Route, Routes, useSearchParams } from 'react-router'
+import { AddonWaysOutlet } from '@antresol/test-core/addons/watchWays'
 import { candidateGroups, FindAndAdd, searchedSong, type SearchScope } from '../find/FindAndAdd'
 import { RequestReleaseSheet } from '../find/RequestReleaseSheet'
 
@@ -66,6 +67,7 @@ function Find({ nothing = false }: { nothing?: boolean }) {
         ))}
       </div>
       {q.length >= 2 && <FindAndAdd text={text} q={q} scope={scope} nothing={nothing} admin={Boolean(user?.isAdmin)} />}
+      <AddonWaysOutlet />
     </>
   )
 }
@@ -142,21 +144,12 @@ describe('Поиск', () => {
     }
 
     it('a card has a ▾ with «Выбрать раздачу…» for every adult, and no other way of watching', async () => {
-      await open(user({ canWatchOnline: true }))
+      await open(user({}))
       const card = await cardOf('Дюна')
       await userEvent.click(within(card).getByRole('button', { name: 'Другие способы просмотра' }))
       expect(screen.getByRole('menuitem', { name: 'Выбрать раздачу…' })).toBeInTheDocument() // not only the admin
-      // the online way is not the search block's
+      // no other addon has a way here (FindAndAdd.test.tsx: one that has)
       expect(screen.queryByRole('menuitemradio')).not.toBeInTheDocument()
-    })
-
-    it('?online=1 on the search page does not open the online sheet of every film card', async () => {
-      const f = stubFilms(user({ canWatchOnline: true }))
-      await session.login(2)
-      renderSearch('/search?q=Дюна&online=1')
-      await cardOf('Дюна')
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-      expect(f.mock.calls.some(([u]) => String(u).includes('/api/online'))).toBe(false)
     })
 
     it('«Смотреть» streams the title', async () => {
@@ -187,7 +180,7 @@ describe('Поиск', () => {
     })
 
     it('a series card keeps «Выбрать серию»; its download button goes to the title page', async () => {
-      stubFilms(user({ isAdmin: true, canWatchOnline: true }))
+      stubFilms(user({ isAdmin: true }))
       await session.login(2)
       render(
         <MemoryRouter initialEntries={['/search?q=Дюна']}>

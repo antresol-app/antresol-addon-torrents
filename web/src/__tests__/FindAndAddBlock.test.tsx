@@ -12,6 +12,7 @@ vi.mock('@antresol/addon-sdk', async (orig) => ({
   useUser: () => me,
 }))
 
+import { AddonWaysOutlet } from '@antresol/test-core/addons/watchWays'
 import { FindAndAddBlock } from '../find/FindAndAddBlock'
 
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { 'Content-Type': 'application/json' } })
@@ -48,6 +49,7 @@ const renderBlock = () =>
         <Route path="/search" element={<FindAndAddBlock q="Дюна" text="Дюна" scope="all" nothing={false} />} />
         <Route path="/play/input/:id" element={<Player />} />
       </Routes>
+      <AddonWaysOutlet />
     </MemoryRouter>,
   )
 

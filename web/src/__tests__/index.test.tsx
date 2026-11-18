@@ -49,11 +49,14 @@ describe('registerAddon("torrents")', () => {
     expect(contributionsOf('torrents')?.strings?.en?.['follows.mine']).toBe('Following')
   })
 
-  it('registers the title page’s panel, watch way, «Скачать» and the episode player', async () => {
+  it('registers the title page’s panels (the row’s «Следить», the pin), watch way, «Скачать» and the episode player', async () => {
     await import('../index')
     const c = contributionsOf('torrents')
-    expect(c?.itemPanels).toHaveLength(1)
-    expect(c?.itemPanels?.[0]?.admin).toBeFalsy()
+    // «Следить» is a button of the action row, the panel under it the other
+    expect(c?.itemPanels?.map((p) => [Boolean(p.inRow), Boolean(p.admin)])).toEqual([
+      [true, false],
+      [false, false],
+    ])
     expect(c?.itemActions?.map((a) => [a.label, a.icon, a.watchWay, a.admin])).toEqual([
       ['watch.now', 'play', true, undefined],
       ['download.title', 'download', undefined, undefined],

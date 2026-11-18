@@ -18,7 +18,7 @@ import { Downloads } from './pages/Downloads'
 import { Settings } from './pages/Settings'
 import { Sources } from './pages/Sources'
 import { SeedingStats } from './stats/SeedingStats'
-import { downloadable, openDownload, TitlePanels, watchableOffLibrary, watchFromTitle } from './titlepage/TitlePanels'
+import { downloadable, FollowTile, openDownload, TitlePanels, watchableOffLibrary, watchFromTitle } from './titlepage/TitlePanels'
 import { flat, type Key } from './strings'
 import { KeepAction } from './watch/KeepAction'
 import { useWatchProgress } from './watch/useWatchProgress'
@@ -71,9 +71,9 @@ registerAddon(ID, {
   // «Одобрить» in «Просьбы»: the release picker of the requested title
   requestActions: [{ element: RequestReleaseSheet }],
   statsBlocks: [{ element: SeedingStats, admin: true }],
-  // under the action row of an item's and a title's page: «Следить», the
-  // pinned release, «Добавить сезон…»
-  itemPanels: [{ element: TitlePanels }],
+  // «Следить» is a round button of the action row (a tile on a phone); under
+  // the row of an item's and a title's page: the pinned release, «Добавить сезон…»
+  itemPanels: [{ element: FollowTile, inRow: true }, { element: TitlePanels }],
   // a title off the library: «Смотреть сейчас» among the core's «Смотреть ▾»
   // ways and the round «Скачать»; each run returns its sheet
   itemActions: [

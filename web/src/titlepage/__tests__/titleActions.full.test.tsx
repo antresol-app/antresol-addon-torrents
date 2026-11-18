@@ -12,7 +12,7 @@ import { resetAddonsForTests } from '@antresol/test-registry'
 import { session } from '@antresol/test-core/state/session'
 import type { Release } from '@antresol/test-addon/types'
 import { WATCH_WAY } from '@antresol/test-addon/episodes/useEpisodePlay'
-import { adult, admin, json, kid, online, posts, registerTheAddon, renderAt, serve, signIn, X, type Call } from './page'
+import { adult, admin, json, kid, otherWay, posts, registerOtherWay, registerTheAddon, renderAt, serve, signIn, X, type Call } from './page'
 
 const IH = 'a'.repeat(40)
 const movie = { tmdbId: 42, kind: 'movie', title: 'Дюна', year: 2021, poster: '', backdrop: '', overview: '', inLibrary: false, libraryItemId: null, genres: [] }
@@ -61,9 +61,11 @@ async function open(user: { id: number }, path = '/title/movie/42') {
 const where = () => screen.getByTestId('where')
 
 beforeAll(registerTheAddon)
+beforeAll(registerOtherWay)
 afterAll(() => resetAddonsForTests())
 beforeEach(() => {
   localStorage.clear()
+  otherWay.on = false
   progress = null
   pin = null
 })
@@ -73,8 +75,9 @@ afterEach(() => {
 })
 
 describe('«Смотреть сейчас» in the core’s «Смотреть ▾»', () => {
-  it('an online profile gets «Смотреть сейчас» beside «Онлайн»; choosing it streams and is remembered', async () => {
-    const { calls, view } = await open(online)
+  it('with another addon’s way «Смотреть сейчас» sits beside «Онлайн»; choosing it streams and is remembered', async () => {
+    otherWay.on = true
+    const { calls, view } = await open(adult)
     await userEvent.click(await screen.findByRole('button', { name: 'Другие способы просмотра' }))
     expect(screen.getAllByRole('menuitemradio').map((m) => m.textContent)).toEqual(['Онлайн', 'Смотреть сейчас'])
     await userEvent.click(screen.getByRole('menuitemradio', { name: 'Смотреть сейчас' }))
@@ -89,7 +92,7 @@ describe('«Смотреть сейчас» in the core’s «Смотреть �
     await waitFor(() => expect(acquires(calls)).toHaveLength(2))
   })
 
-  it('without online «Смотреть» is the addon’s way alone', async () => {
+  it('without another addon’s way «Смотреть» is the addon’s way alone', async () => {
     const { calls } = await open(adult)
     expect(await screen.findByRole('button', { name: 'Смотреть' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Другие способы просмотра' })).not.toBeInTheDocument()

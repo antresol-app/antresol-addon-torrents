@@ -35,6 +35,14 @@
   flex-wrap: wrap;
   gap: var(--s-2);
 }
+/* on a phone the page's copy is centred (the card's heading and text with
+   it), so its buttons are too */
+@media (max-width: 699px) {
+  .actions,
+  .meta {
+    justify-content: center;
+  }
+}
 .said {
   margin: 0;
   font: var(--t-footnote);

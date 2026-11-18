@@ -5,17 +5,30 @@ import { render } from '@testing-library/react'
 import { vi } from 'vitest'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { ItemDetail } from '@antresol/test-core/pages/ItemDetail'
+import { registerAddon } from '@antresol/test-registry'
 import { session } from '@antresol/test-core/state/session'
 
 export const json = (b: unknown, status = 200) =>
   new Response(b === undefined ? null : JSON.stringify(b), { status, headers: { 'Content-Type': 'application/json' } })
 
 export const adult = { id: 2, name: 'Мама', avatar: 'grad-3', hasPassword: false, isAdmin: false, isKid: false, maxRating: null }
-export const online = { ...adult, canWatchOnline: true }
 export const admin = { ...adult, id: 1, name: 'Папа', isAdmin: true }
 export const kid = { ...adult, id: 3, name: 'Коля', isKid: true }
 
 export const X = '/api/addons/torrents/x/'
+
+/**
+ * Another addon's watch way (id `online:way`, «Онлайн»: what the online
+ * addon contributes), offered while `otherWay.on`. It is what the addon's
+ * «Смотреть сейчас» sits beside in the core's «Смотреть ▾»; register it
+ * once (registerOtherWay) and switch it per case.
+ */
+export const otherWay = { on: false }
+export const registerOtherWay = () =>
+  registerAddon('online', {
+    strings: { ru: { way: 'Онлайн' }, en: { way: 'Online' } },
+    itemActions: [{ label: 'way', icon: 'play', watchWay: true, visible: () => otherWay.on, run: () => undefined }],
+  })
 
 export type Call = { url: string; method: string; body: unknown }
 export type Answer = (url: string, method: string, body: unknown) => Response | undefined
@@ -41,7 +54,6 @@ export function serve(user: object, answer: Answer = () => undefined, extra: { t
     if (url.includes(`${X}pinned/`) && method === 'GET') return json({ pin: null })
     if (url.includes(`${X}acquire/progress`)) return new Response(null, { status: 204 })
     if (url.includes(`${X}releases`)) return json({ releases: [], rejected: [], failed: [] })
-    if (url.includes('/api/online/sources')) return json({ sources: [] })
     return json({})
   })
   vi.stubGlobal('fetch', f)

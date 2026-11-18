@@ -25,8 +25,6 @@ function serve(user: Record<string, unknown> = adult) {
     if (url.includes('/x/pinned/') && url.endsWith('/download')) return json({ infoHash: IH, fileIndex: -1, streamUrl: '', status: 'downloading', note: 'Серия 2 добавлена к загрузке' })
     if (url.endsWith('/x/acquire') && init?.method === 'POST') return json({ infoHash: IH, fileIndex: 0, streamUrl: '', status: 'downloading' })
     if (url.includes('/x/releases')) return json({ releases: [], rejected: [], failed: [] })
-    if (url.includes('/api/online/sources')) return json({ sources: [] })
-    if (url.includes('/api/online/progress')) return json({ entries: [] })
     return json(user)
   })
   vi.stubGlobal('fetch', f)

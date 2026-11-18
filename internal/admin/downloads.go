@@ -69,10 +69,11 @@ func (d *downloads) list(w http.ResponseWriter, r *http.Request) {
 }
 
 // markWatched sets Watched of the movie and series torrents for the
-// profile; without Deps.Watched, or on a failed lookup, it stays unset
-// (only a filter hint).
+// profile; without Deps.Watched, without a profile (uid <= 0: the request
+// carried no X-Antresol-User, and the core refuses a lookup for no
+// profile), or on a failed lookup, it stays unset (only a filter hint).
 func (d *downloads) markWatched(ctx context.Context, uid int64, vs []acquire.TorrentView) {
-	if d.Watched == nil {
+	if d.Watched == nil || uid <= 0 {
 		return
 	}
 	ids := d.Acquire.VideoItems(ctx)

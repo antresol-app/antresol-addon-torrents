@@ -324,6 +324,65 @@ func TestTorrents_ListAndPause(t *testing.T) {
 	}
 }
 
+// videoAcquire is fakeAcquire with two library-backed torrents ("aa" a
+// movie, "bb" a series), which is what makes markWatched ask the core.
+type videoAcquire struct{ *fakeAcquire }
+
+func (videoAcquire) VideoItems(context.Context) map[string]int64 {
+	return map[string]int64{"aa": 11, "bb": 22}
+}
+
+// A request that carries no profile (no X-Antresol-User: userID is 0) never
+// asks the core which titles were watched: the core would answer 400 «Нет
+// такого профиля» for it. The torrents stay without a Watched mark.
+func TestMarkWatched_NoUserSkipsCore(t *testing.T) {
+	views := func() []acquire.TorrentView {
+		return []acquire.TorrentView{
+			{Status: torrent.Status{InfoHash: "aa"}},
+			{Status: torrent.Status{InfoHash: "bb"}, Kind: acquire.KindSeries},
+		}
+	}
+	var asked []int64
+	d := &downloads{Deps{Acquire: videoAcquire{newFakeAcquire()},
+		Watched: func(_ context.Context, uid int64, items, series []int64) (map[int64]bool, error) {
+			asked = append(asked, uid)
+			return map[int64]bool{11: true, 22: false}, nil
+		}}}
+
+	vs := views()
+	d.markWatched(context.Background(), 0, vs)
+	if len(asked) != 0 {
+		t.Fatalf("the core was asked for profile %v without a profile", asked)
+	}
+	for _, v := range vs {
+		if v.Watched != nil {
+			t.Fatalf("%s: Watched set without a profile: %v", v.InfoHash, *v.Watched)
+		}
+	}
+
+	// the same lists for a real profile still ask, and are marked
+	vs = views()
+	d.markWatched(context.Background(), 2, vs)
+	if len(asked) != 1 || asked[0] != 2 {
+		t.Fatalf("asked %v, want one call for profile 2", asked)
+	}
+	if vs[0].Watched == nil || !*vs[0].Watched || vs[1].Watched == nil || *vs[1].Watched {
+		t.Fatalf("watched marks %v %v", vs[0].Watched, vs[1].Watched)
+	}
+
+	// and the route: the profile of the request is the one asked about
+	asked = nil
+	h := Routes(Deps{Acquire: videoAcquire{newFakeAcquire()}, Watched: d.Watched})
+	r := httptest.NewRequest("GET", "/api/admin/torrents", nil)
+	b, _ := json.Marshal(&admin)
+	r.Header.Set(addonkit.UserHeader, string(b))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 200 || len(asked) != 1 || asked[0] != admin.ID {
+		t.Fatalf("list: %d %s; asked %v", w.Code, w.Body, asked)
+	}
+}
+
 func TestTorrents_PromoteStatusEngine(t *testing.T) {
 	e := newEnv(t, false, false)
 	e.acq.promote = "queued"

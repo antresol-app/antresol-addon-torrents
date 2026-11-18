@@ -1,11 +1,12 @@
 // A TMDB series whose episode guide knows the next episode: the core's
 // «Смотреть С1 Э2» plays it, a torrent or pinned source through the addon's
-// episodeActions; «Другие источники…» opens the
-// addon's release table when the profile does not watch online.
+// episodeActions, over another addon's source kind when the profile chose
+// «Смотреть сейчас» last; «Другие источники…» opens the addon's release table
+// when the guide lists its kinds.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { resetAddonsForTests } from '@antresol/test-registry'
+import { registerAddon, resetAddonsForTests } from '@antresol/test-registry'
 import type { EpisodeSource, SourceChoice, TitleEpisodes } from '@antresol/test-core/api/types'
 import { ep, online } from '@antresol/test-core/components/episodes/__tests__/fixtures'
 import { session } from '@antresol/test-core/state/session'
@@ -13,7 +14,6 @@ import { WATCH_WAY } from '@antresol/test-addon/episodes/useEpisodePlay'
 import { adult, json, posts, registerTheAddon, renderAt, serve, signIn, X, type Call } from './page'
 
 const IH = 'c'.repeat(40)
-const watcher = { ...adult, canWatchOnline: true }
 const show = {
   tmdbId: 77, kind: 'series', title: 'Сёгун', year: 2024, poster: '', backdrop: '', overview: '', inLibrary: false,
   libraryItemId: null, genres: [], seasons: [{ number: 1, episodes: 3 }],
@@ -24,7 +24,7 @@ const guideOf = (episodes: TitleEpisodes['episodes']): TitleEpisodes => ({
   title: { kind: 'series', tmdbId: 77, name: 'Сёгун', poster: '', status: 'returning' }, episodes,
 })
 
-async function open(guide: TitleEpisodes, choice: SourceChoice | null = null, user: { id: number } = watcher) {
+async function open(guide: TitleEpisodes, choice: SourceChoice | null = null, user: { id: number } = adult) {
   const calls = serve(
     user,
     (url, method) => {
@@ -74,15 +74,21 @@ describe('the title page’s next episode', () => {
     expect(posts(calls, `${X}pinned/series/77/play`)).toEqual([{ season: 1, episode: 2 }])
   })
 
-  it('no choice, «Смотреть сейчас» remembered: the torrent over online', async () => {
+  it('no choice, «Смотреть сейчас» remembered: the torrent over a source kind another addon plays', async () => {
+    // the online kind has a player of another addon, ranked ahead of the torrent (20 < 30): the way's preference wins
+    const played: string[] = []
+    registerAddon('online', {
+      episodeActions: [{ kinds: ['online'], order: { online: 20 }, use: () => ({ play: () => void played.push('online'), other: () => {}, node: null }) }],
+    })
     localStorage.setItem('antresol.watchWay.2', WATCH_WAY)
     const calls = await open(guideOf([ep(2, { sources: [online('alpha', 'Voice A'), torrent] })]))
     await userEvent.click(await screen.findByRole('button', { name: 'Смотреть С1 Э2' }))
     await waitFor(() => expect(where()).toHaveTextContent('/play/input/tor-in'))
     expect(acquires(calls)).toHaveLength(1)
+    expect(played).toEqual([])
   })
 
-  it('▾ «Другие источники…» opens the addon’s release table without online', async () => {
+  it('▾ «Другие источники…» opens the addon’s release table when the guide lists its kind', async () => {
     const calls = await open(guideOf([ep(2, { sources: [torrent] })]), null, adult)
     await screen.findByRole('button', { name: 'Смотреть С1 Э2' })
     await userEvent.click(screen.getByRole('button', { name: 'Другие способы просмотра' }))

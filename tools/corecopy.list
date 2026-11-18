@@ -31,7 +31,7 @@ metadata/wikidata/*.go
 # the sidecar helpers, the client needs auto.go):
 # those work on library.Repo, which the addon replaces with its library
 # adapter over addonkit, so they are not copied.
-metadata/tmdb/client.go metadata/tmdb/genres.go metadata/tmdb/related.go metadata/tmdb/videos.go metadata/tmdb/discover_full.go
+metadata/tmdb/client.go metadata/tmdb/genres.go metadata/tmdb/related.go metadata/tmdb/videos.go metadata/tmdb/discover.go
 metadata/musicbrainz/artist.go metadata/musicbrainz/catalog.go metadata/musicbrainz/client.go metadata/musicbrainz/match.go metadata/musicbrainz/names.go
 metadata/openlibrary/client.go
 subtitles/sidecar.go

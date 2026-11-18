@@ -1,7 +1,8 @@
 // «Найти и добавить» on «Поиск» (the full build's; never a kid's: kids get
 // the core's RequestSearch): a catalog chosen by the segmented control (TMDB,
 // MusicBrainz, Open Library, or the manga name itself) for what is not on
-// the server yet: films get «Смотреть ▾» and the round download button (the
+// the server yet: films get «Смотреть ▾» (the addon's own way, then the
+// watch ways of the profile's other addons) and the round download button (the
 // release sheet), series the same two as links to the title page; albums and
 // books «На сервер». Admins can pick the release by hand («Выбрать
 // раздачу…» in the ▾ menu, «Выбрать релиз…» for albums, where each torrent
@@ -21,6 +22,7 @@ import {
   titlePath,
   ui,
   useDebounced,
+  useWatchWays,
   WatchButton,
   type Found,
   type SearchBlock,
@@ -28,7 +30,7 @@ import {
 } from '@antresol/addon-sdk'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { discover } from '../api'
+import { discover, ID } from '../api'
 import { useT, type Key } from '../i18n'
 import { DownloadControl } from '../shared/DownloadControl'
 import { releaseLink, ReleaseTable } from '../shared/ReleaseTable'
@@ -168,8 +170,8 @@ function CandidateRow({ c, admin }: { c: Candidate; admin: boolean }) {
   const busy = state.status === 'busy' ? state.mode : null
   const series = c.kind === 'series'
   const progress = useTitleProgress(series ? null : { kind: c.kind, tmdbId: c.tmdbId })
-  // the addon's one way (no online way in search)
-  const ways: WatchWay[] = [{ id: 'torrent', label: t('item.way.torrent'), run: () => void run(target, 'stream') }]
+  // the addon's own way; the other addons' come after it (FilmWatch)
+  const own: WatchWay = { id: 'torrent', label: t('item.way.torrent'), run: () => void run(target, 'stream') }
 
   // a started download: the sheet closes and the ring takes over at once
   const started = (ok: boolean) => {
@@ -206,12 +208,10 @@ function CandidateRow({ c, admin }: { c: Candidate; admin: boolean }) {
             </>
           ) : (
             <>
-              <WatchButton
-                label={t('comp.action.watch')}
-                ways={ways}
-                current="torrent"
+              <FilmWatch
+                c={c}
+                own={own}
                 extra={[{ label: t('item.pickReleaseWatch'), run: () => openSheet('stream') }]}
-                size="small"
                 loading={busy === 'stream'}
                 disabled={!!busy}
               />
@@ -235,6 +235,43 @@ function CandidateRow({ c, admin }: { c: Candidate; admin: boolean }) {
       </div>
       {sheet && <VideoReleaseSheet c={c} mode={sheet} replacing={replacing} admin={admin} acq={acq} onStarted={started} onClose={() => setSheet(null)} />}
     </li>
+  )
+}
+
+/**
+ * A film row's «Смотреть ▾»: the addon's own way, then the watch ways of
+ * the profile's other addons (the SDK's useWatchWays: each answers its own
+ * `useAvailable`, and joins the menu when it does), then the extras. A
+ * component of its own so a series row, which has no «Смотреть ▾», asks no
+ * addon.
+ */
+function FilmWatch({
+  c,
+  own,
+  extra,
+  loading,
+  disabled,
+}: {
+  c: Candidate
+  own: WatchWay
+  extra: { label: string; run: () => void }[]
+  loading: boolean
+  disabled: boolean
+}) {
+  const t = useT()
+  const all = useWatchWays({ kind: 'movie', tmdbId: c.tmdbId, title: c.title, poster: c.poster })
+  // useWatchWays lists this addon's own ways too (`<id>:…`): the row has its own already
+  const others = all.filter((w) => !w.id.startsWith(`${ID}:`))
+  return (
+    <WatchButton
+      label={t('comp.action.watch')}
+      ways={[own, ...others]}
+      current={own.id}
+      extra={extra}
+      size="small"
+      loading={loading}
+      disabled={disabled}
+    />
   )
 }
 
