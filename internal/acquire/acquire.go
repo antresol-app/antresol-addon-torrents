@@ -474,6 +474,7 @@ func New(o Options) *Service {
 	}
 	if o.Disk != nil {
 		o.Disk.removed = s.removed // a pruned stream is a removed download
+		o.Disk.dropSuperseded = s.dropSuperseded
 	}
 	o.Engine.OnComplete(s.completed)
 	s.watchPeers()
@@ -539,6 +540,78 @@ func (s *Service) prune(ctx context.Context) {
 	}
 	if err := s.o.Disk.PruneStreamCache(ctx, limit); err != nil {
 		s.log.Warn("prune stream cache", "err", err)
+	}
+}
+
+// replaceStreams removes the earlier «Смотреть сейчас» torrents of what
+// stream a now plays (the same movie, or the same episode of a series):
+// picking another source replaces the one watched before. Saved downloads
+// (a promoted stream included) are kept, and so is a stream someone else is
+// reading right now.
+func (s *Service) replaceStreams(ctx context.Context, a acquisition) {
+	if s.o.Disk == nil {
+		return
+	}
+	s.o.Disk.Unsupersede(a.InfoHash) // picked again: it is the one watched now
+	if a.TMDBID <= 0 || (a.Kind != KindMovie && a.Kind != KindSeries) {
+		return
+	}
+	rows, err := s.o.DB.QueryContext(ctx, `SELECT infohash FROM acquisitions WHERE kind=? AND tmdb_id=? AND season=? AND episode=? AND infohash<>?`,
+		a.Kind, a.TMDBID, a.Season, a.Episode, a.InfoHash)
+	if err != nil {
+		s.log.Warn("replace streams", "err", err)
+		return
+	}
+	var old []string
+	for rows.Next() {
+		var ih string
+		if rows.Scan(&ih) == nil {
+			old = append(old, ih)
+		}
+	}
+	rows.Close()
+	for _, ih := range old {
+		h, ok := s.o.Engine.Get(ih)
+		if !ok || h.Status().Mode != ModeStream {
+			continue
+		}
+		err := s.dropStream(ctx, ih)
+		switch {
+		case err == nil:
+			s.log.Info("stream replaced by another source", "infohash", ih, "by", a.InfoHash)
+		case errors.Is(err, errStreamInUse):
+			// a reader has it open (the player still on the old source, or
+			// another viewer): it goes once nobody reads it
+			s.o.Disk.Supersede(ih)
+		case errors.Is(err, torrent.ErrModeChanged), errors.Is(err, ErrNotFound), errors.Is(err, ErrInvalid):
+			// a promote or a remove meanwhile: kept
+		default:
+			s.log.Warn("replace stream", "infohash", ih, "err", err)
+		}
+	}
+}
+
+// dropStream removes stream torrent ih with its data and acquisition
+// unless a reader has it open (errStreamInUse); the core is told.
+func (s *Service) dropStream(ctx context.Context, ih string) error {
+	err := s.removeWith(ctx, ih, func() error { return s.o.Disk.DropStream(ctx, ih) })
+	if err == nil {
+		s.removed(ih)
+	}
+	return err
+}
+
+// dropSuperseded is Disk's call for a superseded stream nobody has read
+// for supersededGrace. A reader back meanwhile keeps it (marked: its
+// release schedules it again); one being organized is retried later.
+func (s *Service) dropSuperseded(ih string) {
+	err := s.dropStream(context.Background(), ih)
+	switch {
+	case err == nil:
+		s.log.Info("superseded stream removed", "infohash", ih)
+	case errors.Is(err, errStreamInUse), errors.Is(err, torrent.ErrModeChanged), errors.Is(err, ErrNotFound):
+	default:
+		s.log.Warn("remove superseded stream", "infohash", ih, "err", err)
 	}
 }
 
@@ -1196,6 +1269,7 @@ func (s *Service) Acquire(ctx context.Context, req AcquireRequest) (AcquireResul
 		}
 		out.FileIndex = idx
 		out.StreamURL = StreamURL(ih, idx)
+		s.replaceStreams(ctx, a)
 	}
 	out.Status = h.Status().Status
 	s.checkDisk()
@@ -1512,6 +1586,9 @@ func (s *Service) Promote(ctx context.Context, ih string, force bool) (string, e
 	}
 	if err := s.o.Engine.SetModeTo(ctx, ih, ModeDownload, s.downloadDir(kind)); err != nil {
 		return "", notFound(err)
+	}
+	if s.o.Disk != nil {
+		s.o.Disk.Unsupersede(ih) // saved: never dropped as a replaced stream
 	}
 	s.checkDisk()
 	return h.Status().Status, nil

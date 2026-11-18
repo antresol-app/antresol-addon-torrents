@@ -50,10 +50,60 @@ type Disk struct {
 	// removed is told of each pruned entry (acquire.New: Service.removed,
 	// so the watch inputs of it go too).
 	removed func(ih string)
+	// dropSuperseded removes a superseded stream once nobody has read it
+	// for supersededGrace (acquire.New: Service.dropSuperseded).
+	dropSuperseded func(ih string)
 
 	mu       sync.Mutex
 	lastUsed map[string]time.Time
 	active   map[string]int
+	// superseded: stream torrents another source of the same title replaced
+	// while a reader had them open; they go when the last reader is done.
+	superseded map[string]bool
+}
+
+// supersededGrace is how long a superseded stream outlives its last
+// reader: the same viewer may open it again (a player's next range
+// request, a step back to the old source).
+var supersededGrace = 60 * time.Second
+
+// Supersede marks stream torrent ih as replaced by another source: it is
+// removed supersededGrace after its last reader is done (now, if none).
+func (d *Disk) Supersede(ih string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.superseded == nil {
+		d.superseded = map[string]bool{}
+	}
+	d.superseded[ih] = true
+	if d.active[ih] <= 0 {
+		d.scheduleDropLocked(ih)
+	}
+}
+
+// Unsupersede takes the mark off ih (it is watched again, or saved).
+func (d *Disk) Unsupersede(ih string) {
+	d.mu.Lock()
+	delete(d.superseded, ih)
+	d.mu.Unlock()
+}
+
+// scheduleDropLocked calls dropSuperseded after supersededGrace unless ih
+// was read again meanwhile (a later Touch) or is no longer superseded.
+// d.mu is held.
+func (d *Disk) scheduleDropLocked(ih string) {
+	if d.dropSuperseded == nil {
+		return
+	}
+	at := d.lastUsed[ih]
+	time.AfterFunc(supersededGrace, func() {
+		d.mu.Lock()
+		due := d.superseded[ih] && d.active[ih] <= 0 && d.lastUsed[ih].Equal(at)
+		d.mu.Unlock()
+		if due {
+			d.dropSuperseded(ih)
+		}
+	})
 }
 
 // Usage returns used and total bytes of the file system holding Root.
@@ -101,11 +151,17 @@ func (d *Disk) Use(ih string) (release func()) {
 	return func() {
 		once.Do(func() {
 			d.mu.Lock()
+			defer d.mu.Unlock()
+			if d.lastUsed == nil {
+				d.lastUsed = map[string]time.Time{}
+			}
+			d.lastUsed[ih] = time.Now()
 			if d.active[ih]--; d.active[ih] <= 0 {
 				delete(d.active, ih)
+				if d.superseded[ih] {
+					d.scheduleDropLocked(ih)
+				}
 			}
-			d.mu.Unlock()
-			d.Touch(ih)
 		})
 	}
 }
@@ -115,11 +171,40 @@ func (d *Disk) Use(ih string) (release func()) {
 // the viewer hold no reader open) and is never pruned.
 const keepRecent = 30 * time.Minute
 
+// errStreamInUse: DropStream kept a stream torrent someone reads right now.
+var errStreamInUse = errors.New("stream torrent is being read")
+
+// DropStream removes stream torrent ih with its data, as PruneStreamCache
+// does, unless a reader has it open (another viewer): errStreamInUse then.
+// A torrent no longer in stream mode (promoted to a download) is kept:
+// torrent.ErrModeChanged.
+func (d *Disk) DropStream(ctx context.Context, ih string) error {
+	if d.Engine == nil {
+		return errStreamInUse
+	}
+	// d.mu is held over the removal so a new Use waits for it and then
+	// finds no torrent (as in PruneStreamCache).
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.active[ih] > 0 {
+		return errStreamInUse
+	}
+	err := d.Engine.RemoveIfMode(ctx, ih, torrent.ModeStream, true)
+	if err == nil || errors.Is(err, torrent.ErrNotFound) || errors.Is(err, torrent.ErrModeChanged) {
+		delete(d.lastUsed, ih)
+		delete(d.superseded, ih) // gone, or saved: no longer to be dropped
+	}
+	return err
+}
+
 // PruneStreamCache removes stream torrents (with their data), least
 // recently watched first, until the cache holds at most maxBytes. Download
 // and seed torrents — including promoted ones — are never touched, nor are
 // torrents being watched or watched in the last 30 minutes, nor the most
 // recently watched one (a single title may be bigger than the whole cache).
+// A stream torrent idle that long that holds no data at all (a source
+// opened and left at 0 %) goes whatever the limit: it keeps nothing worth
+// a place in «Загрузки».
 func (d *Disk) PruneStreamCache(ctx context.Context, maxBytes int64) error {
 	if d.Engine == nil {
 		return nil
@@ -161,10 +246,7 @@ func (d *Disk) PruneStreamCache(ctx context.Context, maxBytes int64) error {
 	}
 	var errs []error
 	for _, c := range cands {
-		if total <= maxBytes {
-			break
-		}
-		if c.ih == newest {
+		if c.size > 0 && (total <= maxBytes || c.ih == newest) {
 			continue
 		}
 		if err := ctx.Err(); err != nil {
@@ -181,6 +263,7 @@ func (d *Disk) PruneStreamCache(ctx context.Context, maxBytes int64) error {
 		err := d.Engine.RemoveIfMode(ctx, c.ih, torrent.ModeStream, true)
 		if err == nil {
 			delete(d.lastUsed, c.ih)
+			delete(d.superseded, c.ih)
 		}
 		d.mu.Unlock()
 		if err != nil {
