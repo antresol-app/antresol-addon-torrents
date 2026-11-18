@@ -338,6 +338,29 @@ func episodeOf(f File, j Job, videos int) (season, ep, end int) {
 	return season, ep, end
 }
 
+// SeriesEpisodes are the episodes plan places the video files paths of a
+// series torrent as (episodeOf; season, episode: the request), each
+// {season, first, last}; a file it cannot tell is left out. What a
+// download not organized yet will bring (acquire's Pending).
+func SeriesEpisodes(paths []string, season, episode int) [][3]int {
+	var videos []File
+	for _, p := range paths {
+		if IsVideo(p) {
+			videos = append(videos, File{Path: p})
+		}
+	}
+	j := Job{Kind: library.KindSeries, Season: season, Episode: episode}
+	var out [][3]int
+	for _, f := range videos {
+		s, ep, end := episodeOf(f, j, len(videos))
+		if ep == 0 {
+			continue
+		}
+		out = append(out, [3]int{s, ep, max(ep, end)})
+	}
+	return out
+}
+
 // Organize places the torrent's video files (or music, book, audiobook
 // and comic files) into the library: a hard link when the library is on
 // the same file system, otherwise a copy. The torrent keeps seeding its

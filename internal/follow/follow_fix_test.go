@@ -342,3 +342,46 @@ func TestUnmatchedOverTitleSearch(t *testing.T) {
 		}
 	}
 }
+
+// threeSeasonShow: TMDB has seasons 1–3 of 10 aired episodes each.
+func (e *env) threeSeasonShow() {
+	e.tm.tv.Seasons = []tmdb.SeasonCount{{Number: 1, Episodes: 10}, {Number: 2, Episodes: 10}, {Number: 3, Episodes: 10}}
+	e.tm.seasons = map[int]tmdb.SeasonDetails{1: season(1, 10, 0), 2: season(2, 10, 0), 3: season(3, 10, 0)}
+}
+
+// A pack of S01–S03 downloading (Pending: each episode its files hold,
+// the S02 files lacking E05) leaves the follow nothing but S02E05.
+func TestPendingMultiSeasonPackCovers(t *testing.T) {
+	e := newEnv(t)
+	e.threeSeasonShow()
+	for s := 1; s <= 3; s++ {
+		for ep := 1; ep <= 10; ep++ {
+			if s == 2 && ep == 5 {
+				continue
+			}
+			e.acq.pending = append(e.acq.pending, acquire.PendingAcquisition{Kind: "series", TMDBID: 42, Season: s, Episode: ep, EpisodeEnd: ep, InfoHash: "pk"})
+		}
+	}
+	f := e.add("series", 42)
+	if res := e.check(f.ID); !reflect.DeepEqual(res.Queued, []string{"S02E05"}) || res.Missing != 1 {
+		t.Fatalf("%+v %v", res, e.acq.requests())
+	}
+}
+
+// Before its file list, a pack of seasons (one row per season) and a
+// whole-series download (season 0) cover their seasons.
+func TestPendingSeasonsBeforeFilesCover(t *testing.T) {
+	for name, pending := range map[string][]acquire.PendingAcquisition{
+		"range": {{Kind: "series", TMDBID: 42, Season: 1, InfoHash: "pk"}, {Kind: "series", TMDBID: 42, Season: 2, InfoHash: "pk"},
+			{Kind: "series", TMDBID: 42, Season: 3, InfoHash: "pk"}},
+		"whole": {{Kind: "series", TMDBID: 42, InfoHash: "pk"}},
+	} {
+		e := newEnv(t)
+		e.threeSeasonShow()
+		e.acq.pending = pending
+		f := e.add("series", 42)
+		if res := e.check(f.ID); len(res.Queued) != 0 || len(e.acq.requests()) != 0 {
+			t.Fatalf("%s: %+v %v", name, res, e.acq.requests())
+		}
+	}
+}

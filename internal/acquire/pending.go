@@ -7,6 +7,8 @@ import (
 	"slices"
 
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/release"
+	"github.com/antresol-app/antresol-addon-torrents/internal/indexer"
+	"github.com/antresol-app/antresol-addon-torrents/internal/organize"
 )
 
 // PendingAcquisition is a download that is not in the library yet: queued,
@@ -21,15 +23,23 @@ type PendingAcquisition struct {
 }
 
 // Pending lists acquisitions not organized yet («Следить» does not ask for
-// them again); a pack downloading several seasons once per season asked
-// for (acquisitionMeta.Seasons). Streams are left out (they are never
+// them again). A pack downloading some of its seasons comes once per
+// season asked for and not placed yet (acquisitionMeta.Seasons), whole.
+// Any other series download covers the episodes its selected files will
+// be placed as (organize.SeriesEpisodes), one row each, once the engine
+// has its file list: a pack of several seasons added whole marks all of
+// them; before that (or when no file tells) what its release name says —
+// a range of seasons once per season («S01-S03»), else its season or
+// episode range (coverage). Streams are left out (they are never
 // organized; a stream that is kept turns into a download), and so are rows
-// whose torrent is gone.
+// whose torrent is gone and rows whose organize failed for good
+// (maxOrganizeAttempts: the follow may look for those episodes again).
 func (s *Service) Pending(ctx context.Context) ([]PendingAcquisition, error) {
 	rows, err := s.o.DB.QueryContext(ctx, `SELECT a.kind, a.tmdb_id, a.season, a.episode, a.infohash, t.name, t.release_json, a.meta_json
 		FROM acquisitions a JOIN torrents t ON lower(t.infohash)=lower(a.infohash)
 		WHERE a.organized_at IS NULL AND t.mode<>'stream'
-		ORDER BY a.created_at, a.infohash`)
+		AND NOT (a.organize_error != '' AND a.organize_attempts >= ?)
+		ORDER BY a.created_at, a.infohash`, maxOrganizeAttempts)
 	if err != nil {
 		return nil, err
 	}
@@ -43,14 +53,31 @@ func (s *Service) Pending(ctx context.Context) ([]PendingAcquisition, error) {
 		if err := rows.Scan(&p.Kind, &p.TMDBID, &p.Season, &p.Episode, &p.InfoHash, &name, &rel, &meta); err != nil {
 			return nil, err
 		}
+		var m acquisitionMeta
+		if p.Kind == KindSeries && meta != "" {
+			_ = json.Unmarshal([]byte(meta), &m) // a bad row: no seasons
+		}
 		if p.Kind == KindSeries {
+			// a pack of seasons asked for one by one covers those seasons
+			// whole (below); any other download what its files hold
+			if eps := s.fileCoverage(p); len(m.Seasons) == 0 && len(eps) > 0 {
+				out = append(out, eps...)
+				continue
+			}
 			coverage(&p, name, rel.String)
 		}
 		// a pack of several seasons: each season asked for and not placed
 		// yet, whole (its selection holds the whole season, also when an
 		// episode started it)
-		var m acquisitionMeta
-		if p.Kind == KindSeries && meta != "" && json.Unmarshal([]byte(meta), &m) == nil && len(m.Seasons) > 0 {
+		if p.Kind == KindSeries && len(m.Seasons) == 0 {
+			if lo, hi := seasonsNamed(name, rel.String); hi > lo {
+				for n := lo; n <= hi; n++ {
+					out = append(out, PendingAcquisition{Kind: p.Kind, TMDBID: p.TMDBID, Season: n, InfoHash: p.InfoHash})
+				}
+				continue
+			}
+		}
+		if p.Kind == KindSeries && len(m.Seasons) > 0 {
 			for _, n := range m.Seasons {
 				if !slices.Contains(m.Organized, n) {
 					out = append(out, PendingAcquisition{Kind: p.Kind, TMDBID: p.TMDBID, Season: n, InfoHash: p.InfoHash})
@@ -92,4 +119,61 @@ func coverage(p *PendingAcquisition, name, rel string) {
 			return
 		}
 	}
+}
+
+// fileCoverage is what a series download's selected files will be placed
+// as (organize.SeriesEpisodes, as its organize reads them), one row per
+// episode or multi-episode file, sorted. Nil before the engine has the file list,
+// or when no file tells its episode.
+func (s *Service) fileCoverage(p PendingAcquisition) []PendingAcquisition {
+	if s.o.Engine == nil {
+		return nil
+	}
+	h, ok := s.o.Engine.Get(p.InfoHash)
+	if !ok || h == nil {
+		return nil
+	}
+	var paths []string
+	for _, f := range h.Files() {
+		if f.Selected {
+			paths = append(paths, f.Path)
+		}
+	}
+	var out []PendingAcquisition
+	seen := map[[3]int]bool{}
+	for _, k := range organize.SeriesEpisodes(paths, p.Season, p.Episode) {
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		out = append(out, PendingAcquisition{Kind: p.Kind, TMDBID: p.TMDBID, Season: k[0], Episode: k[1], EpisodeEnd: k[2], InfoHash: p.InfoHash})
+	}
+	slices.SortFunc(out, func(a, b PendingAcquisition) int {
+		if a.Season != b.Season {
+			return a.Season - b.Season
+		}
+		return a.Episode - b.Episode
+	})
+	return out
+}
+
+// seasonsNamed is the range of seasons a release name says it holds
+// (indexer.SeasonRange of its pick's title, else the torrent name): a
+// pack added whole before its file list is known covers each of them.
+func seasonsNamed(name, rel string) (lo, hi int) {
+	var r struct {
+		Title string `json:"title"`
+	}
+	if rel != "" {
+		_ = json.Unmarshal([]byte(rel), &r)
+	}
+	for _, t := range []string{r.Title, name} {
+		if t == "" {
+			continue
+		}
+		if lo, hi = indexer.SeasonRange(t); lo > 0 {
+			return lo, hi
+		}
+	}
+	return 0, 0
 }

@@ -886,10 +886,16 @@ func (c *check) series(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	// queued downloads count as had: what each release covers
+	// queued downloads count as had: what each release covers (a
+	// whole-series download whose files are not known yet: every season)
 	packs := map[int]bool{}
+	wholeSeries := false
 	for _, p := range pending {
 		if p.Kind != acquire.KindSeries || p.TMDBID != c.f.TMDBID {
+			continue
+		}
+		if p.Season == 0 && p.Episode == 0 {
+			wholeSeries = true
 			continue
 		}
 		if p.Episode == 0 {
@@ -906,7 +912,7 @@ func (c *check) series(ctx context.Context) error {
 	}
 	var seasons []tmdb.SeasonDetails
 	for _, sc := range d.Seasons {
-		if sc.Number <= 0 || sc.Episodes <= 0 || packs[sc.Number] || perSeason[sc.Number] >= sc.Episodes {
+		if sc.Number <= 0 || sc.Episodes <= 0 || wholeSeries || packs[sc.Number] || perSeason[sc.Number] >= sc.Episodes {
 			continue // specials, empty, queued as a whole or all there
 		}
 		sd, err := s.TMDB.Season(ctx, c.f.TMDBID, sc.Number)
