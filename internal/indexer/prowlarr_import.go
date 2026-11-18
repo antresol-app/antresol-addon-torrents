@@ -30,6 +30,9 @@ type Imported struct {
 	// NeedsFlareSolverr: the indexer has Prowlarr's flaresolverr tag (its
 	// site sits behind a Cloudflare challenge).
 	NeedsFlareSolverr bool `json:"needsFlareSolverr,omitempty"`
+	// Hidden: the settings Prowlarr's API did not give (passwords); the
+	// source is added without them and needs them typed in.
+	Hidden []string `json:"hidden,omitempty"`
 }
 
 // Reasons of PreviewProwlarr and ImportProwlarr the migration report sorts
@@ -59,6 +62,7 @@ type indexerRow struct {
 	priority             int
 	flaresolverr         bool
 	cookies              map[string]string // Prowlarr's live session (IndexerStatus)
+	hidden               []string          // settings Prowlarr's API masked (ProwlarrIndexer.Hidden)
 }
 
 // readProwlarrIndexers reads the Indexers table from a snapshot of the
@@ -331,7 +335,55 @@ func (m *Manager) prowlarr(ctx context.Context, prowlarrDBPath, tmpDir string, d
 	if err != nil {
 		return nil, err
 	}
+	return m.importRows(ctx, list, customDir, defsDir, dry)
+}
 
+// ProwlarrIndexer is one indexer as Prowlarr's API gives it
+// (ParseProwlarrAPI), for ImportProwlarrList: what a row of the database
+// holds, in the same shape. Hidden are the settings Prowlarr masks in its
+// answers (passwords): they are not carried over.
+type ProwlarrIndexer struct {
+	ID             int64
+	Name           string
+	Implementation string
+	// Settings is the JSON the Indexers.Settings column holds:
+	// definitionFile, extraFieldData and baseUrl of a Cardigann indexer,
+	// the flat fields of a native one.
+	Settings     string
+	Enable       bool
+	Priority     int
+	FlareSolverr bool
+	Cookies      map[string]string
+	Hidden       []string
+}
+
+// ImportProwlarrList is ImportProwlarr over indexers read from Prowlarr's
+// API: there is no Definitions folder, so a definition Antresol does not
+// ship is not found.
+func (m *Manager) ImportProwlarrList(ctx context.Context, list []ProwlarrIndexer) ([]Imported, error) {
+	return m.prowlarrList(ctx, list, false)
+}
+
+// PreviewProwlarrList is what ImportProwlarrList would do, writing nothing.
+func (m *Manager) PreviewProwlarrList(ctx context.Context, list []ProwlarrIndexer) ([]Imported, error) {
+	return m.prowlarrList(ctx, list, true)
+}
+
+func (m *Manager) prowlarrList(ctx context.Context, in []ProwlarrIndexer, dry bool) ([]Imported, error) {
+	m.importMu.Lock()
+	defer m.importMu.Unlock()
+	rows := make([]indexerRow, len(in))
+	for i, x := range in {
+		rows[i] = indexerRow{id: x.ID, name: x.Name, impl: x.Implementation, settings: x.Settings, enable: x.Enable,
+			priority: x.Priority, flaresolverr: x.FlareSolverr, cookies: x.Cookies, hidden: x.Hidden}
+	}
+	return m.importRows(ctx, rows, "", "", dry)
+}
+
+// importRows adds the indexers read from Prowlarr (its database or its
+// API); customDir and defsDir are Prowlarr's definition folders ("" =
+// none). The caller holds importMu.
+func (m *Manager) importRows(ctx context.Context, list []indexerRow, customDir, defsDir string, dry bool) ([]Imported, error) {
 	existing, err := m.Sources(ctx)
 	if err != nil {
 		return nil, err
@@ -352,11 +404,28 @@ func (m *Manager) prowlarr(ctx context.Context, prowlarrDBPath, tmpDir string, d
 		}
 	}
 	matched := map[int64]bool{} // sources an indexer of this run already matched
+	// an indexer whose passwords Prowlarr hid matches a source by its
+	// other settings: the source has the password, the answer did not
+	sameBut := func(defID string, settings map[string]string, hidden []string) (int64, bool) {
+		for _, s := range existing {
+			if s.DefinitionID != defID {
+				continue
+			}
+			rest := maps.Clone(s.Settings)
+			for _, h := range hidden {
+				delete(rest, h)
+			}
+			if importKey(defID, rest) == importKey(defID, settings) {
+				return s.ID, true
+			}
+		}
+		return 0, false
+	}
 	prowlarrDefs := map[string]*cardigann.Definition{}
 
 	var out []Imported
 	for _, r := range list {
-		im := Imported{Name: r.name, NeedsFlareSolverr: r.flaresolverr}
+		im := Imported{Name: r.name, NeedsFlareSolverr: r.flaresolverr, Hidden: r.hidden}
 		var ps prowlarrSettings
 		if err := json.Unmarshal([]byte(r.settings), &ps); err != nil {
 			im.Reason = "Настройки индексатора не читаются"
@@ -416,6 +485,14 @@ func (m *Manager) prowlarr(ctx context.Context, prowlarrDBPath, tmpDir string, d
 			im.Reason = ReasonAlready
 			out = append(out, im)
 			continue
+		}
+		if len(r.hidden) > 0 {
+			if id, ok := sameBut(def.ID, settings, r.hidden); ok {
+				matched[id], have[key] = true, id
+				im.Reason = ReasonAlready
+				out = append(out, im)
+				continue
+			}
 		}
 		if prev, ok := byLoose[looseKey(def.ID, settings)]; ok && cookieLogin(def) && !matched[prev.ID] {
 			matched[prev.ID] = true
@@ -483,6 +560,9 @@ func (m *Manager) replaceCookie(ctx context.Context, s Source, cookie string) (S
 // in a dry run. The cache keeps it per run. Nil when there is none or it
 // does not parse.
 func (m *Manager) prowlarrDefinition(dir, name string, dry bool, cache map[string]*cardigann.Definition) *cardigann.Definition {
+	if dir == "" { // read over the API: no Prowlarr folder
+		return nil
+	}
 	key := dir + "\x00" + name
 	if d, ok := cache[key]; ok {
 		return d

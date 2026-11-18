@@ -9,9 +9,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io/fs"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -154,6 +156,13 @@ type fakeQBServer struct {
 	logins     int
 	user, pass string
 	engine     func() []torrent.Status
+	// mirror (a BT_backup folder) makes it the Web API of that qBittorrent:
+	// /torrents/info lists every torrent with its name and save path,
+	// /torrents/export, /files and /pieceStates answer from the folder's
+	// .torrent and .fastresume files, as qBittorrent answers from its
+	// own state. noExport: a qBittorrent older than 4.5.
+	mirror   string
+	noExport bool
 }
 
 const fakeSID = "sid-123"
@@ -216,13 +225,85 @@ func (f *fakeQBServer) serve(w http.ResponseWriter, r *http.Request) {
 		}
 	case r.URL.Path == "/api/v2/torrents/info" && r.Method == http.MethodGet:
 		out := []map[string]string{}
-		if s, ok := f.state[r.Form.Get("hashes")]; ok {
-			out = append(out, map[string]string{"hash": r.Form.Get("hashes"), "state": s})
+		if f.mirror != "" && r.Form.Get("hashes") == "" {
+			for _, h := range slices.Sorted(maps.Keys(f.state)) {
+				out = append(out, f.mirrorInfo(h, f.state[h]))
+			}
+		} else if s, ok := f.state[r.Form.Get("hashes")]; ok {
+			out = append(out, f.mirrorInfo(r.Form.Get("hashes"), s))
+		}
+		json.NewEncoder(w).Encode(out)
+	case f.mirror != "" && r.URL.Path == "/api/v2/torrents/export" && r.Method == http.MethodGet && !f.noExport:
+		b, err := os.ReadFile(filepath.Join(f.mirror, r.Form.Get("hash")+".torrent"))
+		if _, ok := f.state[r.Form.Get("hash")]; err != nil || !ok {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Write(b)
+	case f.mirror != "" && r.URL.Path == "/api/v2/torrents/files" && r.Method == http.MethodGet:
+		info, fr, ok := f.mirrored(r.Form.Get("hash"))
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		out := []map[string]any{}
+		for i, fi := range info.UpvertedFiles() {
+			name := path.Join(append([]string{info.BestName()}, fi.BestPath()...)...)
+			if i < len(fr.mapped) && fr.mapped[i] != "" {
+				name = fr.mapped[i]
+			}
+			out = append(out, map[string]any{"index": i, "name": name, "size": fi.Length})
+		}
+		json.NewEncoder(w).Encode(out)
+	case f.mirror != "" && r.URL.Path == "/api/v2/torrents/pieceStates" && r.Method == http.MethodGet:
+		_, fr, ok := f.mirrored(r.Form.Get("hash"))
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		out := make([]int, len(fr.pieces))
+		for i, p := range fr.pieces {
+			if p&1 == 1 {
+				out[i] = 2
+			}
 		}
 		json.NewEncoder(w).Encode(out)
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
+}
+
+// mirrorInfo is a /torrents/info entry; with a mirror, its name and save
+// path come from the folder (as qBittorrent's own state has them).
+func (f *fakeQBServer) mirrorInfo(h, state string) map[string]string {
+	out := map[string]string{"hash": h, "state": state}
+	if info, fr, ok := f.mirrored(h); ok {
+		out["name"], out["save_path"] = info.BestName(), fr.savePath
+		if fr.name != "" {
+			out["name"] = fr.name
+		}
+	}
+	return out
+}
+
+// mirrored reads h's .torrent and .fastresume from the mirror.
+func (f *fakeQBServer) mirrored(h string) (metainfo.Info, fastresume, bool) {
+	if f.mirror == "" {
+		return metainfo.Info{}, fastresume{}, false
+	}
+	mi, err := metainfo.LoadFromFile(filepath.Join(f.mirror, h+".torrent"))
+	if err != nil {
+		return metainfo.Info{}, fastresume{}, false
+	}
+	info, err := mi.UnmarshalInfo()
+	if err != nil {
+		return metainfo.Info{}, fastresume{}, false
+	}
+	fr, err := readFastresume(filepath.Join(f.mirror, h+".fastresume"))
+	if err != nil {
+		return metainfo.Info{}, fastresume{}, false
+	}
+	return info, fr, true
 }
 
 func (f *fakeQBServer) all() []qbCall {
@@ -285,7 +366,14 @@ type env struct {
 	state  string // QBOptions.StateDir
 	series string // library root
 	movies string // library root
+	api    bool   // BT_backup is not mounted: opts reads qBittorrent over its Web API (qbOverAPI)
 }
+
+// qbOverAPI makes newEnv's qBittorrent one reached over its Web API only
+// (TestQBOverAPI runs the BT_backup tests again that way): the fake
+// answers from the BT_backup folder the test fills, and the importer is
+// given none.
+var qbOverAPI bool
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
@@ -329,6 +417,9 @@ func newEnvWith(t *testing.T, cfg torrent.EngineConfig) *env {
 	e.lib = &coretest.Library{}
 	e.qb = fakeQB(t)
 	e.qb.engine = e.eng.List
+	if qbOverAPI {
+		e.api, e.qb.mirror = true, e.bt
+	}
 	t.Cleanup(func() { e.eng.Close(); d.Close() })
 	return e
 }
@@ -364,8 +455,13 @@ func (e *env) addTorrent(files map[string][]byte, fr map[string]any) (ih string,
 }
 
 func (e *env) opts() QBOptions {
+	bt := e.bt
+	if e.api {
+		bt = filepath.Join(e.bt, "not-mounted")
+	}
 	return QBOptions{
-		BTBackupDir:   e.bt,
+		BTBackupDir:   bt,
+		FromAPI:       e.api,
 		WebURL:        e.qb.URL,
 		LinkDir:       e.link,
 		StateDir:      e.state,

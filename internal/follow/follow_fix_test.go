@@ -385,3 +385,27 @@ func TestPendingSeasonsBeforeFilesCover(t *testing.T) {
 		}
 	}
 }
+
+// Pack files numbered absolutely (S02E11–E20 for a 10-episode season) do
+// not make the season look complete: its real episodes are still looked
+// for.
+func TestPendingMisnumberedPackNotComplete(t *testing.T) {
+	e := newEnv(t)
+	e.threeSeasonShow()
+	for s := 1; s <= 3; s++ {
+		for ep := 1; ep <= 10; ep++ {
+			if s == 2 {
+				ep += 10
+			}
+			e.acq.pending = append(e.acq.pending, acquire.PendingAcquisition{Kind: "series", TMDBID: 42, Season: s, Episode: ep, EpisodeEnd: ep, InfoHash: "pk"})
+			if s == 2 {
+				ep -= 10
+			}
+		}
+	}
+	f := e.add("series", 42)
+	e.check(f.ID)
+	if len(e.acq.requests()) == 0 {
+		t.Fatal("season 2 counted as complete from mis-numbered pack files")
+	}
+}

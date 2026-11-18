@@ -553,6 +553,28 @@ export type MigrateState = Awaited<ReturnType<MigrateApi['migrateState']>>
 /** POST x/admin/migrate/run. */
 export type MigrateRunRequest = Parameters<MigrateApi['migrateRun']>[0]
 
+/**
+ * A service's way over the network when its files are not mounted (the
+ * status's `connect` on a source): `apikey` asks for an address and an
+ * API key, `login` for an address, a login and a password. The key and
+ * the password never come back, only whether one is kept.
+ */
+export interface MigrateConnect {
+  kind: 'apikey' | 'login'
+  url: string
+  username?: string
+  hasSecret: boolean
+  connected: boolean
+}
+
+/** POST x/admin/migrate/sources/{id}/connect; a blank key or password keeps the kept one. */
+export interface MigrateConnectRequest {
+  url: string
+  apiKey?: string
+  username?: string
+  password?: string
+}
+
 /** GET x/admin/migrate/switch: what «Перейти на …» would turn on and download. */
 export interface MigrateSwitchPlan {
   follows: number

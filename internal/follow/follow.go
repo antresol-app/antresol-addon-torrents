@@ -906,9 +906,17 @@ func (c *check) series(ctx context.Context) error {
 			have[[2]int{p.Season, e}] = true
 		}
 	}
+	// an episode counts toward its season only if the season has it: a pack
+	// numbered absolutely (S02E113) must not make a season look complete
+	size := map[int]int{}
+	for _, sc := range d.Seasons {
+		size[sc.Number] = sc.Episodes
+	}
 	perSeason := map[int]int{}
 	for k := range have {
-		perSeason[k[0]]++
+		if k[1] >= 1 && k[1] <= size[k[0]] {
+			perSeason[k[0]]++
+		}
 	}
 	var seasons []tmdb.SeasonDetails
 	for _, sc := range d.Seasons {

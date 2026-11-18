@@ -540,3 +540,88 @@ func TestMigrateAPI_NotReadyNeverEmpty(t *testing.T) {
 		t.Fatalf("%d %s", w.Code, w.Body)
 	}
 }
+
+// fakeRadarr is Radarr's API with one monitored movie; it wants key.
+func fakeRadarr(t *testing.T, key string) *httptest.Server {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Api-Key") != key {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		switch r.URL.Path {
+		case "/api/v3/system/status":
+			io.WriteString(w, `{"appName":"Radarr","version":"5.0"}`)
+		case "/api/v3/movie":
+			io.WriteString(w, `[{"id":1,"title":"Дюна","year":2021,"tmdbId":438631,"monitored":true,"hasFile":false},
+				{"id":2,"title":"Брат","year":1997,"tmdbId":2,"monitored":false,"hasFile":true}]`)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// «Проверить» on a card whose database is not mounted: the address and
+// the key are checked and kept; the status shows the connection, never
+// the key; «Забыть» drops it.
+func TestMigrateAPI_Connect(t *testing.T) {
+	e := newEnv(t)
+	const key = "radarr-secret-key"
+	srv := fakeRadarr(t, key)
+	path := "/api/admin/migrate/sources/radarr/connect"
+
+	w := e.admin("POST", path, `{"url":"`+srv.URL+`","apiKey":"wrong"}`)
+	if w.Code != http.StatusBadRequest || errText(w) != "Radarr не принял API-ключ — скопируйте его в Radarr: «Settings → General → API Key»" {
+		t.Fatalf("wrong key: %d %s", w.Code, w.Body)
+	}
+	en := adminUser
+	en.Lang = "en"
+	w = e.do("POST", path, `{"url":"`+srv.URL+`","apiKey":"wrong"}`, &en)
+	if w.Code != http.StatusBadRequest || errText(w) != "Radarr didn’t accept the API key — copy it from Radarr: “Settings → General → API Key”" {
+		t.Fatalf("wrong key (en): %d %s", w.Code, w.Body)
+	}
+
+	w = e.admin("POST", path, `{"url":"`+srv.URL+`","apiKey":"`+key+`"}`)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"detail":"2 фильма, 1 отслеживается"`) || strings.Contains(w.Body.String(), key) {
+		t.Fatalf("connect: %d %s", w.Code, w.Body)
+	}
+
+	w = e.admin("GET", "/api/admin/migrate", "")
+	if strings.Contains(w.Body.String(), key) {
+		t.Fatalf("the key is in the status: %s", w.Body)
+	}
+	var st struct {
+		Sources []struct {
+			mediaimport.SourceStatus
+			Connect *migrate.RemoteView `json:"connect"`
+		} `json:"sources"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &st)
+	for _, s := range st.Sources {
+		if s.Connect == nil || s.Connect.Kind == "" {
+			t.Errorf("%s has no connection form: %+v", s.ID, s)
+		}
+		if s.ID == "radarr" && (!s.Found || s.Detail != "2 фильма, 1 отслеживается" || !s.Connect.Connected || s.Connect.URL != srv.URL || !s.Connect.HasSecret) {
+			t.Errorf("radarr %+v %+v", s.SourceStatus, s.Connect)
+		}
+		if s.ID == "qbittorrent" && s.Connect.Kind != "login" {
+			t.Errorf("qbittorrent %+v", s.Connect)
+		}
+	}
+
+	if w := e.admin("POST", "/api/admin/migrate/sources/jellyfin/connect", `{}`); w.Code != http.StatusBadRequest {
+		t.Fatalf("unknown: %d %s", w.Code, w.Body)
+	}
+	if w := e.do("POST", path, `{"url":"`+srv.URL+`","apiKey":"`+key+`"}`, &addonkit.User{ID: 9, UID: "u9", Name: "Гость"}); w.Code != http.StatusForbidden {
+		t.Fatalf("not an admin: %d %s", w.Code, w.Body)
+	}
+
+	if w := e.admin("DELETE", path, ""); w.Code != http.StatusOK {
+		t.Fatalf("forget: %d %s", w.Code, w.Body)
+	}
+	w = e.admin("GET", "/api/admin/migrate", "")
+	if !strings.Contains(w.Body.String(), `"connected":false`) || strings.Contains(w.Body.String(), srv.URL) {
+		t.Fatalf("after forget: %s", w.Body)
+	}
+}

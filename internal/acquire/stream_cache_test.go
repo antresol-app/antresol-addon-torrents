@@ -2,6 +2,7 @@ package acquire
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -139,5 +140,48 @@ func TestPruneTellsOnRemoved(t *testing.T) {
 	}
 	if !e.eng.removed[ihA] || e.eng.removed[ihB] || len(got) != 1 || got[0] != ihA {
 		t.Fatalf("removed %v, told %v", e.eng.removed, got)
+	}
+}
+
+// While the media disk is offline the stream torrents report no data:
+// nothing is pruned (their files would stay on the disk without a
+// record). A torrent in error, detached (no metadata) or with its data
+// missing is never taken for one that never received data.
+func TestPruneKeepsStreamsOfOfflineDisk(t *testing.T) {
+	now := time.Now()
+	eng := newFakeEngine()
+	offline := torrent.Status{InfoHash: "off", Mode: torrent.ModeStream, Status: torrent.StatusError, Error: "Медиадиск недоступен", AddedAt: now.Add(-2 * time.Hour)}
+	eng.put(offline)
+	eng.put(torrent.Status{InfoHash: "empty", Mode: torrent.ModeStream, Size: 1 << 30, AddedAt: now.Add(-2 * time.Hour)})
+	eng.offline = "Медиадиск недоступен"
+	d := &Disk{Root: "/", Engine: eng}
+	if err := d.PruneStreamCache(context.Background(), 1<<40); err != nil {
+		t.Fatal(err)
+	}
+	if eng.removed["off"] || eng.removed["empty"] {
+		t.Fatalf("pruned while the media disk is offline: %v", eng.removed)
+	}
+
+	eng.offline = ""
+	eng.put(torrent.Status{InfoHash: "nometa", Mode: torrent.ModeStream, AddedAt: now.Add(-2 * time.Hour)})
+	eng.put(torrent.Status{InfoHash: "lost", Mode: torrent.ModeStream, Size: 1 << 30, DataMissing: true, AddedAt: now.Add(-2 * time.Hour)})
+	if err := d.PruneStreamCache(context.Background(), 1<<40); err != nil {
+		t.Fatal(err)
+	}
+	if eng.removed["off"] || eng.removed["nometa"] || eng.removed["lost"] {
+		t.Fatalf("an errored, detached or data-missing stream taken for empty: %v", eng.removed)
+	}
+	if !eng.removed["empty"] || !eng.removedData["empty"] {
+		t.Fatal("a stream that never received data kept on a reachable disk")
+	}
+
+	// an unreadable disk prunes nothing either
+	eng.put(torrent.Status{InfoHash: "empty2", Mode: torrent.ModeStream, Size: 1 << 30, AddedAt: now.Add(-2 * time.Hour)})
+	d.statfs = func(string) (int64, int64, error) { return 0, 0, os.ErrNotExist }
+	if err := d.PruneStreamCache(context.Background(), 0); err != nil {
+		t.Fatal(err)
+	}
+	if eng.removed["empty2"] {
+		t.Fatal("pruned on an unreadable media disk")
 	}
 }

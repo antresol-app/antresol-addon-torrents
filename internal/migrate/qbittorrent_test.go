@@ -342,8 +342,12 @@ func TestQBImportDryRunTouchesNothing(t *testing.T) {
 	if len(calls) == 0 || calls[0].Path != "/api/v2/app/version" {
 		t.Fatalf("calls %+v", calls)
 	}
+	reads := map[string]bool{"/api/v2/app/version": true, "/api/v2/torrents/info": true}
+	if e.api { // BT_backup over the Web API: its reads too
+		reads["/api/v2/torrents/export"], reads["/api/v2/torrents/files"], reads["/api/v2/torrents/pieceStates"] = true, true, true
+	}
 	for _, c := range calls {
-		if c.Method != "GET" || (c.Path != "/api/v2/app/version" && c.Path != "/api/v2/torrents/info") {
+		if c.Method != "GET" || !reads[c.Path] {
 			t.Fatalf("dry run sent %+v", c)
 		}
 	}

@@ -41,6 +41,8 @@ func Routes(d Deps) http.Handler {
 	mux.HandleFunc("POST /api/admin/migrate/reports/{id}/rollback", h.rollback)
 	mux.HandleFunc("GET /api/admin/migrate/switch", h.switchPreview)
 	mux.HandleFunc("POST /api/admin/migrate/switch", h.doSwitch)
+	mux.HandleFunc("POST /api/admin/migrate/sources/{id}/connect", h.connect)
+	mux.HandleFunc("DELETE /api/admin/migrate/sources/{id}/connect", h.forget)
 	return mux
 }
 
@@ -110,6 +112,8 @@ func (h *api) err(w http.ResponseWriter, r *http.Request, what string, err error
 		writeErr(w, r, http.StatusConflict, "В этом отчёте нет перенесённых раздач")
 	case errors.Is(err, migrate.ErrRolledBack):
 		writeErr(w, r, http.StatusConflict, "Раздачи из этого переноса уже возвращены")
+	case errors.Is(err, migrate.ErrNoQBConnection):
+		writeErr(w, r, http.StatusConflict, "Чтобы вернуть раздачи, подключите qBittorrent заново: «Подключить» на его карточке (связь не переживает «Забыть» и перезапуск)")
 	case errors.Is(err, migrate.ErrArrNotStopped):
 		writeErr(w, r, http.StatusBadRequest, "Сначала остановите Sonarr и Radarr")
 	case errors.Is(err, migrate.ErrCountChanged):
@@ -120,6 +124,10 @@ func (h *api) err(w http.ResponseWriter, r *http.Request, what string, err error
 		addonkit.WriteError(w, http.StatusConflict, i18n.T(r.Context(), "Сейчас включать рано — %s", i18n.Localize(r.Context(), b.Reason)))
 	case errors.Is(err, migrate.ErrNoFollow):
 		writeErr(w, r, http.StatusConflict, "Для слежения нужен ключ TMDB")
+	case errors.Is(err, migrate.ErrUnknownRemote):
+		writeErr(w, r, http.StatusBadRequest, "Неизвестный источник")
+	case errors.Is(err, migrate.ErrMounted):
+		writeErr(w, r, http.StatusConflict, "Файлы этого сервиса смонтированы — они и используются")
 	default:
 		h.log().Error("torrents: "+what, "err", err)
 		writeErr(w, r, http.StatusInternalServerError, "Внутренняя ошибка сервера")
@@ -141,10 +149,10 @@ type migrateState struct {
 // migrateStatus is the core's status shape; the addon's sources map no
 // profiles, so Users and Profiles are always empty.
 type migrateStatus struct {
-	Sources   []mediaimport.SourceStatus `json:"sources"`
-	Leftovers []mediaimport.Line         `json:"leftovers"`
-	Users     []struct{}                 `json:"users"`
-	Profiles  []struct{}                 `json:"profiles"`
+	Sources   []sourceOut        `json:"sources"`
+	Leftovers []mediaimport.Line `json:"leftovers"`
+	Users     []struct{}         `json:"users"`
+	Profiles  []struct{}         `json:"profiles"`
 	migrateState
 }
 
@@ -176,13 +184,25 @@ func (h *api) state(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// sourceOut is a source's status and, when its files are not mounted, its
+// connection over the network (never the key or the password).
+type sourceOut struct {
+	mediaimport.SourceStatus
+	Connect *migrate.RemoteView `json:"connect,omitempty"`
+}
+
 func (h *api) status(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	out := migrateStatus{Sources: h.d.Migrate.Discover(ctx), Leftovers: h.d.Migrate.LeftoverLines(ctx),
+	found := h.d.Migrate.Discover(ctx)
+	out := migrateStatus{Sources: make([]sourceOut, len(found)), Leftovers: h.d.Migrate.LeftoverLines(ctx),
 		Users: []struct{}{}, Profiles: []struct{}{}}
-	for i := range out.Sources {
-		out.Sources[i].Detail = i18n.Localize(ctx, out.Sources[i].Detail)
-		out.Sources[i].Error = i18n.Localize(ctx, out.Sources[i].Error)
+	for i, st := range found {
+		st.Detail = i18n.Localize(ctx, st.Detail)
+		st.Error = i18n.Localize(ctx, st.Error)
+		out.Sources[i].SourceStatus = st
+		if v, ok := h.d.Migrate.Remote(st.ID); ok {
+			out.Sources[i].Connect = &v
+		}
 	}
 	out.Leftovers = mediaimport.LocalizeLines(ctx, out.Leftovers)
 	st, ok := h.readState(w, r)
@@ -293,4 +313,48 @@ func (h *api) doSwitch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	addonkit.WriteJSON(w, http.StatusOK, map[string]int{"activated": n})
+}
+
+// connectTimeout bounds «Проверить» of a connection (it reads the whole
+// list once, to count it).
+const connectTimeout = 2 * time.Minute
+
+// connect is «Проверить» on a card whose files are not mounted: the
+// address and the key (qBittorrent: the login) are checked and kept in
+// memory for the migration; the answer is what was found, or the reason
+// in {"error"}. The key and the password are never answered or logged.
+func (h *api) connect(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		URL      string `json:"url"`
+		APIKey   string `json:"apiKey"`
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	id := r.PathValue("id")
+	ctx, cancel := context.WithTimeout(r.Context(), connectTimeout)
+	defer cancel()
+	detail, err := h.d.Migrate.Connect(ctx, id, migrate.Remote{URL: req.URL, APIKey: req.APIKey, Username: req.Username, Password: req.Password})
+	var re *migrate.RemoteError
+	if errors.As(err, &re) {
+		writeErr(w, r, http.StatusBadRequest, re.Msg)
+		return
+	}
+	if err != nil {
+		h.err(w, r, "migrate connect", err)
+		return
+	}
+	v, _ := h.d.Migrate.Remote(id)
+	addonkit.WriteJSON(w, http.StatusOK, map[string]any{"detail": i18n.Localize(r.Context(), detail), "connect": v})
+}
+
+// forget drops a kept connection («Забыть»).
+func (h *api) forget(w http.ResponseWriter, r *http.Request) {
+	if err := h.d.Migrate.Forget(r.PathValue("id")); err != nil {
+		h.err(w, r, "migrate forget", err)
+		return
+	}
+	addonkit.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

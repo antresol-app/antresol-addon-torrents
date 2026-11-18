@@ -267,6 +267,9 @@ func (r *Runner) Discover(ctx context.Context) []SourceStatus {
 	key := fingerprint(paths...)
 	for _, src := range srcs {
 		key += src.ID() + "\n"
+		if rs, ok := src.(remoteSource); ok && rs.overAPI() {
+			key += "api\n" // Connect and Forget drop the cache
+		}
 	}
 	key += i18n.FromContext(ctx)
 	if v, ok := r.cache.get("discover", key); ok {
@@ -274,10 +277,28 @@ func (r *Runner) Discover(ctx context.Context) []SourceStatus {
 	}
 	r.scans.Add(1)
 	out := r.discover(ctx, srcs)
-	if ctx.Err() == nil {
+	if ctx.Err() == nil && !apiFailed(srcs, out) {
 		r.cache.put("discover", key, slices.Clone(out))
 	}
 	return out
+}
+
+// apiFailed: a source read over its API answered with an error — the
+// service may have been down for a moment, and nothing changes the cache key
+// when it is back, so the look is not kept (the next one asks again).
+func apiFailed(srcs []Source, out []SourceStatus) bool {
+	over := map[string]bool{}
+	for _, src := range srcs {
+		if rs, ok := src.(remoteSource); ok && rs.overAPI() {
+			over[src.ID()] = true
+		}
+	}
+	for _, st := range out {
+		if over[st.ID] && st.Error != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Runner) discover(ctx context.Context, srcs []Source) []SourceStatus {
@@ -290,8 +311,12 @@ func (r *Runner) discover(ctx context.Context, srcs []Source) []SourceStatus {
 	out := make([]SourceStatus, 0, len(srcs))
 	for _, src := range srcs {
 		st := SourceStatus{ID: src.ID(), Name: src.Name(), Path: src.Path()}
-		if !present(st.Path, src.IsDir()) {
+		rs, remote := src.(remoteSource)
+		if !present(st.Path, src.IsDir()) && (!remote || !rs.overAPI()) {
 			st.Detail = i18n.T(ctx, "Не найден — смонтируйте %s", st.Path)
+			if remote {
+				st.Detail = i18n.T(ctx, "Не подключён — укажите адрес или смонтируйте %s", st.Path)
+			}
 			out = append(out, st)
 			continue
 		}
@@ -303,8 +328,11 @@ func (r *Runner) discover(ctx context.Context, srcs []Source) []SourceStatus {
 			}
 			r.Logger().Warn("discover", "source", src.ID(), "err", err)
 			var ue *mediaimport.UserError
+			var re *RemoteError
 			if errors.As(err, &ue) {
 				st.Error = ue.Msg
+			} else if errors.As(err, &re) {
+				st.Error = re.Msg
 			} else {
 				st.Error = i18n.T(ctx, "Не удалось прочитать базу %s", st.Name)
 			}

@@ -2,6 +2,8 @@ package acquire
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -145,5 +147,91 @@ func TestPendingPackNotCovering(t *testing.T) {
 	}
 	if got := pendingOf(t, e, "retry"); len(got) != 6 {
 		t.Fatalf("retry covers %v", got)
+	}
+}
+
+// A pack whose organize failed for good still covers its episodes while
+// its files are on the disk (no new download of the same episodes; the
+// admin retries); once its files are gone, they are wanted again.
+func TestPendingFailedPackCoversWhileOnDisk(t *testing.T) {
+	e := newEnv(t)
+	dir := t.TempDir()
+	onDisk := threeSeasons()
+	for i := range onDisk {
+		onDisk[i].FullPath = filepath.Join(dir, filepath.FromSlash(onDisk[i].Path))
+	}
+	p := onDisk[0].FullPath
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gone := threeSeasons()
+	for i := range gone {
+		gone[i].FullPath = filepath.Join(dir, "gone", filepath.FromSlash(gone[i].Path))
+	}
+	e.eng.put(torrent.Status{InfoHash: "kept", Mode: ModeDownload}).files = onDisk
+	e.eng.put(torrent.Status{InfoHash: "lost", Mode: ModeDownload}).files = gone
+	e.eng.put(torrent.Status{InfoHash: "missing", Mode: ModeDownload, DataMissing: true}).files = onDisk
+	execAll(t, e, `INSERT INTO torrents (infohash, name, mode, save_dir) VALUES ('kept','Show.S01-S03','download','`+dir+`'),
+			('lost','Show.S01-S03','download','`+dir+`'),('missing','Show.S01-S03','download','`+dir+`'),
+			('nolist','Other.S01-S03','download','`+dir+`')`,
+		`INSERT INTO acquisitions (infohash, kind, tmdb_id, title, season, episode, organize_error, organize_attempts) VALUES
+			('kept','series',42,'Show',1,0,'Не удалось',3),('lost','series',42,'Show',1,0,'Не удалось',3),
+			('missing','series',42,'Show',1,0,'Не удалось',3),('nolist','series',42,'Show',1,0,'Не удалось',3)`)
+	if got := pendingOf(t, e, "kept"); len(got) != 6 {
+		t.Fatalf("failed pack on disk covers %v", got)
+	}
+	for _, ih := range []string{"lost", "missing"} {
+		if got := pendingOf(t, e, ih); got != nil {
+			t.Fatalf("%s: a failed pack whose files are gone covers %v", ih, got)
+		}
+	}
+	// no file list: its top folder in save_dir tells
+	if got := pendingOf(t, e, "nolist"); got != nil {
+		t.Fatalf("nolist without data covers %v", got)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "Other.S01-S03"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := pendingOf(t, e, "nolist"); len(got) != 3 {
+		t.Fatalf("nolist with its folder covers %v", got)
+	}
+}
+
+// A release name telling one season, picked with no season asked for,
+// covers that season, not the whole series (0, 0).
+func TestPendingSeasonZeroNamedSeason(t *testing.T) {
+	e := newEnv(t)
+	execAll(t, e, `INSERT INTO torrents (infohash, name, mode, save_dir) VALUES ('one','Show.S01.1080p','download','/t'),
+			('all','Show.Complete.Series.1080p','download','/t')`,
+		`INSERT INTO acquisitions (infohash, kind, tmdb_id, title, season, episode) VALUES ('one','series',42,'Show',0,0),('all','series',42,'Show',0,0)`)
+	if got, want := pendingOf(t, e, "one"), [][3]int{{1, 0, 0}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	if got, want := pendingOf(t, e, "all"), [][3]int{{0, 0, 0}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("whole series: got %v, want %v", got, want)
+	}
+}
+
+// «S3 - 08» is season 3 episode 8, not seasons 3–8; spaced and unspaced
+// season ranges stay ranges.
+func TestPendingDashEpisodeNotSeasonRange(t *testing.T) {
+	e := newEnv(t)
+	execAll(t, e, `INSERT INTO torrents (infohash, name, mode, save_dir) VALUES ('ep','[Group] Show S3 - 08 (1080p)','download','/t'),
+			('epz','[Group] Show S3 - 08 (1080p)','download','/t'),('rng','Show Seasons 1 - 3 1080p','download','/t'),('rng2','Show.S1-3.1080p','download','/t')`,
+		`INSERT INTO acquisitions (infohash, kind, tmdb_id, title, season, episode) VALUES ('ep','series',42,'Show',3,8),('epz','series',42,'Show',0,0),
+			('rng','series',42,'Show',0,0),('rng2','series',42,'Show',0,0)`)
+	if got, want := pendingOf(t, e, "ep"), [][3]int{{3, 8, 0}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("episode: got %v, want %v", got, want)
+	}
+	if got, want := pendingOf(t, e, "epz"), [][3]int{{3, 8, 0}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("episode, no season asked: got %v, want %v", got, want)
+	}
+	for _, ih := range []string{"rng", "rng2"} {
+		if got, want := pendingOf(t, e, ih), [][3]int{{1, 0, 0}, {2, 0, 0}, {3, 0, 0}}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("%s: got %v, want %v", ih, got, want)
+		}
 	}
 }

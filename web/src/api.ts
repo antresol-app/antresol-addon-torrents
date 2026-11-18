@@ -14,6 +14,8 @@ import type {
   EngineStatus,
   Follow,
   FollowResolution,
+  MigrateConnect,
+  MigrateConnectRequest,
   MigrateReport,
   MigrateRunRequest,
   MigrateState,
@@ -323,3 +325,8 @@ export const migrateRollback = (id: string) => api.post<{ reportId: string }>(`$
 export const migrateSwitchPreview = () => api.get<MigrateSwitchPlan>('admin/migrate/switch')
 /** Turns on the taken-over follows; 409 when the count changed since the preview. */
 export const migrateSwitch = (req: { confirm: number; arrStopped: boolean }) => api.post<{ activated: number }>('admin/migrate/switch', req)
+/** «Подключить» a service over its API: kept (in the addon's memory) only when it answers; the key and the password are never answered back. */
+export const migrateConnect = (id: string, req: MigrateConnectRequest) =>
+  api.post<{ detail: string; connect: MigrateConnect }>(`admin/migrate/sources/${encodeURIComponent(id)}/connect`, req)
+/** «Забыть»: drops the kept connection. */
+export const migrateForget = (id: string) => api.del<void>(`admin/migrate/sources/${encodeURIComponent(id)}/connect`)

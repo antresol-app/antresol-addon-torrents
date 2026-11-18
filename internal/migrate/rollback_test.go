@@ -2,6 +2,7 @@ package migrate
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -159,8 +160,8 @@ func TestRollbackNoAPIRemovesNothing(t *testing.T) {
 	o := e.opts()
 	o.WebURL = ""
 	rep := &Report{ID: NewReportID(time.Now())}
-	if err := RollbackQB(context.Background(), o, e.eng, from, rep); err != nil {
-		t.Fatal(err)
+	if err := RollbackQB(context.Background(), o, e.eng, from, rep); !errors.Is(err, ErrQBUnreachable) {
+		t.Fatalf("err %v", err)
 	}
 	if l := onlyLine(t, rep); l.Status != StatusFailed || !strings.HasPrefix(l.Reason, "Нет связи с qBittorrent") {
 		t.Fatalf("line %+v", l)

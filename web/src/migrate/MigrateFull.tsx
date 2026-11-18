@@ -10,6 +10,7 @@ import { tr, useT, type Key } from '../i18n'
 import type { MigrateReport, MigrateSwitchPlan } from '../types'
 import m from '../pages/Manage.module.css'
 import full from './MigrateFull.module.css'
+import { SourceSetup } from './SourceSetup'
 
 const { Button, Sheet } = ui
 
@@ -235,4 +236,5 @@ export const migrateFull: MigrateFullApi = {
   progressNote: (current) => (current === 'qbittorrent' ? tr('migrate.progress.qb') : ''),
   subtitle: text('migrate.subtitleFull'),
   rollbackTitle: text('migrate.report.rollback'),
+  SourceSetup,
 }

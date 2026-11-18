@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -48,6 +49,7 @@ func DefaultPaths(importDir, prowlarrDB string) (SourcePaths, LeftoverPaths) {
 var (
 	ErrNothingToRollback = errors.New("migrate: the report moved no torrents")
 	ErrRolledBack        = errors.New("migrate: the report was given back already")
+	ErrNoQBConnection    = errors.New("migrate: no qBittorrent connection to give the torrents back through")
 	ErrArrNotStopped     = errors.New("migrate: Sonarr and Radarr are not stopped")
 	ErrCountChanged      = errors.New("migrate: the number of downloads changed")
 	ErrNoFollow          = errors.New("migrate: following needs a TMDB key")
@@ -109,17 +111,22 @@ type Service struct {
 	// are set per run.
 	QB              QBOptions
 	FlareSolverrSet bool
+	// HTTP is the client of the old services' APIs (nil = their own).
+	HTTP *http.Client
 	// HoldsChanged (optional; the holds pusher's Changed, set by main) is
 	// called after a real qBittorrent import and after a rollback: the
 	// engine's downloads changed, so the core's file holds go out again.
 	// It is read at each call.
 	HoldsChanged func()
+
+	remotes *remotes // the connections typed on the page (Connect), memory only
 }
 
 // New registers the addon's sources and leftovers on r and returns the
 // service around it.
 func New(r *Runner, s Service) *Service {
 	s.Runner = r
+	s.remotes = &remotes{}
 	svc := &s
 	r.Register(&arrSource{s: svc, id: SourceProwlarr, name: "Prowlarr", order: 10, path: s.Paths.Prowlarr})
 	r.Register(&arrSource{s: svc, id: SourceSonarr, name: "Sonarr", order: 20, path: s.Paths.Sonarr})
@@ -154,6 +161,11 @@ func (a *arrSource) Path() string                   { return a.path }
 func (a *arrSource) IsDir() bool                    { return false }
 func (a *arrSource) Problem(context.Context) string { return "" }
 
+func (a *arrSource) overAPI() bool {
+	_, ok := a.s.remoteFor(a.id)
+	return ok
+}
+
 // counts runs the counts on one snapshot of the database at path.
 func counts(ctx context.Context, tmp, path string, cs ...mediaimport.TableCount) ([]int, error) {
 	out := make([]int, len(cs))
@@ -168,6 +180,9 @@ func counts(ctx context.Context, tmp, path string, cs ...mediaimport.TableCount)
 }
 
 func (a *arrSource) Detail(ctx context.Context, tmp string) (string, error) {
+	if r, ok := a.s.remoteFor(a.id); ok {
+		return a.s.remoteDetail(ctx, a.id, *r)
+	}
 	switch a.id {
 	case SourceProwlarr:
 		n, err := mediaimport.CountIn(ctx, tmp, a.path, mediaimport.TableCount{Table: "Indexers"})
@@ -189,7 +204,17 @@ func (a *arrSource) Detail(ctx context.Context, tmp string) (string, error) {
 func (a *arrSource) Import(ctx context.Context, r mediaimport.Run) error {
 	s, rep := a.s, r.Report
 	arr := ArrOptions{ProwlarrDB: s.Paths.Prowlarr, SonarrDB: s.Paths.Sonarr, RadarrDB: s.Paths.Radarr, UserID: r.AdminID,
-		DryRun: r.DryRun, FlareSolverrSet: s.FlareSolverrSet, Tmp: r.Tmp, Now: s.Now}
+		DryRun: r.DryRun, FlareSolverrSet: s.FlareSolverrSet, Tmp: r.Tmp, Now: s.Now, HTTP: s.HTTP}
+	if rm, ok := s.remoteFor(a.id); ok {
+		switch a.id {
+		case SourceProwlarr:
+			arr.ProwlarrAPI = rm
+		case SourceSonarr:
+			arr.SonarrAPI = rm
+		default:
+			arr.RadarrAPI = rm
+		}
+	}
 	if r.Report != nil {
 		// the admin's uid from X-Antresol-User (StartAs): the follows are theirs
 		arr.UserUID = s.AdminUID(r.Report.ID)
@@ -216,7 +241,30 @@ func (q *qbSource) Order() int   { return 90 } // last: Vault checks its torrent
 func (q *qbSource) Path() string { return q.s.Paths.QBBackup }
 func (q *qbSource) IsDir() bool  { return true }
 
+func (q *qbSource) overAPI() bool {
+	_, ok := q.s.remoteFor(SourceQBittorrent)
+	return ok
+}
+
+// opts are the qBittorrent settings of a run or a rollback: the
+// connection typed on the page when BT_backup is not mounted (the
+// .torrent files then come from its Web API), else the addon's own.
+func (s *Service) qbOpts() QBOptions {
+	o := s.QB
+	o.BTBackupDir = s.Paths.QBBackup
+	if o.HTTP == nil {
+		o.HTTP = s.HTTP
+	}
+	if r, ok := s.remoteFor(SourceQBittorrent); ok {
+		o.WebURL, o.Username, o.Password, o.FromAPI = r.URL, r.Username, r.Password, true
+	}
+	return o
+}
+
 func (q *qbSource) Detail(ctx context.Context, _ string) (string, error) {
+	if r, ok := q.s.remoteFor(SourceQBittorrent); ok {
+		return q.s.remoteDetail(ctx, SourceQBittorrent, *r)
+	}
 	ents, err := os.ReadDir(q.Path())
 	if err != nil {
 		return "", &mediaimport.UserError{Msg: i18n.T(ctx, "Не удалось прочитать папку BT_backup"), Err: err}
@@ -231,7 +279,7 @@ func (q *qbSource) Detail(ctx context.Context, _ string) (string, error) {
 }
 
 func (q *qbSource) Problem(ctx context.Context) string {
-	if q.s.QB.WebURL == "" {
+	if q.s.QB.WebURL == "" && !q.overAPI() {
 		return i18n.T(ctx, "Не задан адрес qBittorrent (ANTRESOL_TORRENTS_QBITTORRENT_URL) — раздачи не перенести")
 	}
 	return ""
@@ -243,8 +291,8 @@ func (q *qbSource) Import(ctx context.Context, r mediaimport.Run) error {
 		r.Report.Add(Line{Source: SourceQBittorrent, Kind: "torrent", Name: "qBittorrent", Status: StatusFailed, Reason: "Торренты Antresol недоступны — раздачи не перенесены"})
 		return nil
 	}
-	o := s.QB
-	o.BTBackupDir, o.DryRun, o.AddedBy = s.Paths.QBBackup, r.DryRun, r.AdminID
+	o := s.qbOpts()
+	o.DryRun, o.AddedBy = r.DryRun, r.AdminID
 	if r.Report != nil {
 		// the admin's uid from X-Antresol-User (StartAs): the torrents are theirs
 		o.AddedByUID = s.AdminUID(r.Report.ID)
@@ -303,6 +351,12 @@ func (s *Service) Rollback(ctx context.Context, reportID string) (string, error)
 	} else if done {
 		return "", ErrRolledBack
 	}
+	if s.qbOpts().WebURL == "" {
+		// the connection typed on the page lives in memory (Forget or a
+		// restart drops it): without it nothing can be returned, and a
+		// report of that would only burn the one rollback
+		return "", ErrNoQBConnection
+	}
 	rep := &Report{ID: repID, Sources: []string{SourceQBittorrent}, RollbackOf: from.ID, StartedAt: now, Lines: []Line{}}
 	if err := SaveReport(s.ReportDir, rep); err != nil {
 		return "", err
@@ -310,17 +364,22 @@ func (s *Service) Rollback(ctx context.Context, reportID string) (string, error)
 	started = true
 	s.Go(func(ctx context.Context) {
 		defer end()
+		unreached := false
 		if s.Engine == nil {
 			rep.Add(Line{Source: SourceQBittorrent, Kind: "torrent", Name: "qBittorrent", Status: StatusFailed, Reason: "Торренты Antresol недоступны — ничего не возвращено"})
 		} else {
-			o := s.QB
-			o.BTBackupDir, o.DryRun = s.Paths.QBBackup, false
+			o := s.qbOpts()
+			o.DryRun = false
 			o.Checkpoint = func() { s.Save(rep) }
-			if err := RollbackQB(ctx, o, s.Engine, from, rep); err != nil && ctx.Err() == nil {
+			err := RollbackQB(ctx, o, s.Engine, from, rep)
+			if err != nil && ctx.Err() == nil && !errors.Is(err, ErrQBUnreachable) {
 				s.Logger().Error("rollback", "report", from.ID, "err", err)
 			}
+			// qBittorrent not reached: nothing was returned, so this is not
+			// a finished rollback (rolledBack would refuse every retry)
+			unreached = errors.Is(err, ErrQBUnreachable)
 		}
-		if ctx.Err() == nil {
+		if ctx.Err() == nil && !unreached {
 			rep.FinishedAt = s.Clock()
 		}
 		s.Save(rep)

@@ -7,12 +7,15 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
 
 	"github.com/anacrolix/torrent/metainfo"
 
 	"github.com/antresol-app/antresol-addon-torrents/internal/torrent"
 )
+
+// ErrQBUnreachable: a rollback could not reach qBittorrent, so it did
+// nothing; the person connects it (again) and repeats.
+var ErrQBUnreachable = errors.New("migrate: qBittorrent cannot be reached")
 
 // reasonKeptPaused is a rollback line's reason while torrents must stay
 // paused (QBOptions.KeepPaused says so); reasonNoRule is the reason when the
@@ -35,7 +38,9 @@ const (
 // A torrent Vault no longer has is started only while all its files are on
 // disk (qBittorrent would download missing ones again). Nothing is removed
 // when qBittorrent cannot be reached. Outcomes go to rep, with a Checkpoint
-// after each line. The error is only ctx's.
+// after each line. The error is ctx's, or ErrQBUnreachable when qBittorrent
+// could not be reached: nothing was done, so the rollback is not finished
+// and may be asked again.
 func RollbackQB(ctx context.Context, o QBOptions, eng TorrentEngine, from *Report, rep *Report) error {
 	log := slog.Default().With("component", "migrate")
 	add := func(l Line) {
@@ -50,13 +55,19 @@ func RollbackQB(ctx context.Context, o QBOptions, eng TorrentEngine, from *Repor
 		return nil
 	}
 	qb := newQBClient(o)
+	bk := newQBBackup(o, qb)
 	if err := connectQB(ctx, o, qb); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		log.Warn("qbittorrent api", "url", o.WebURL, "err", err)
-		add(Line{Name: "qBittorrent", Status: StatusFailed, Reason: fmt.Sprintf("Нет связи с qBittorrent (%s) — ничего не возвращено", o.WebURL)})
-		return nil
+		shown := redactURL(o.WebURL)
+		log.Warn("qbittorrent api", "url", shown, "err", err)
+		reason := "Нет связи с qBittorrent — ничего не возвращено; подключите его на странице переноса и повторите"
+		if shown != "" {
+			reason = fmt.Sprintf("Нет связи с qBittorrent (%s) — ничего не возвращено; проверьте подключение и повторите", shown)
+		}
+		add(Line{Name: "qBittorrent", Status: StatusFailed, Reason: reason})
+		return ErrQBUnreachable
 	}
 	for _, src := range todo {
 		if err := ctx.Err(); err != nil {
@@ -117,7 +128,7 @@ func RollbackQB(ctx context.Context, o QBOptions, eng TorrentEngine, from *Repor
 			add(l)
 			continue
 		}
-		if gone && !filesOnDisk(o, src.Ref) {
+		if gone && !filesOnDisk(ctx, o, bk, src.Ref) {
 			// Removed in Vault, maybe with its data: starting it would make
 			// qBittorrent download it again.
 			l.Status, l.Reason = StatusFailed, "Файлов раздачи нет на диске — в qBittorrent не запускаю"
@@ -138,10 +149,11 @@ func RollbackQB(ctx context.Context, o QBOptions, eng TorrentEngine, from *Repor
 }
 
 // filesOnDisk reports whether every non-empty file of the torrent is where
-// qBittorrent keeps it (from BT_backup). Anything unreadable counts as no.
-func filesOnDisk(o QBOptions, ih string) bool {
-	meta, err := os.ReadFile(filepath.Join(o.BTBackupDir, ih+".torrent"))
-	if err != nil {
+// qBittorrent keeps it (from BT_backup or its Web API). Anything
+// unreadable counts as no.
+func filesOnDisk(ctx context.Context, o QBOptions, bk qbBackup, ih string) bool {
+	meta, reason, _ := bk.torrent(ctx, ih)
+	if reason != "" {
 		return false
 	}
 	mi, err := metainfo.Load(bytes.NewReader(meta))
@@ -152,8 +164,8 @@ func filesOnDisk(o QBOptions, ih string) bool {
 	if err != nil {
 		return false
 	}
-	fr, err := readFastresume(filepath.Join(o.BTBackupDir, ih+".fastresume"))
-	if err != nil {
+	fr, reason, _ := bk.resume(ctx, ih)
+	if reason != "" {
 		return false
 	}
 	files := info.UpvertedFiles()

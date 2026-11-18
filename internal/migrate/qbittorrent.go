@@ -11,7 +11,6 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 
@@ -50,10 +49,13 @@ var _ TorrentEngine = (*torrent.Engine)(nil)
 // QBOptions configure ImportQBittorrent and RollbackQB.
 type QBOptions struct {
 	BTBackupDir string // qBittorrent's BT_backup (read only)
-	WebURL      string // qBittorrent Web UI, e.g. http://192.168.1.50:8080
-	Username    string // "" = no login (the address is whitelisted)
-	Password    string
-	Paths       PathMap // qBittorrent paths → Vault paths
+	// FromAPI: BT_backup is not mounted; the .torrent files and their
+	// state come from the Web API (WebURL) instead (qBittorrent 4.5+).
+	FromAPI  bool
+	WebURL   string // qBittorrent Web UI, e.g. http://192.168.1.50:8080
+	Username string // "" = no login (the address is whitelisted)
+	Password string
+	Paths    PathMap // qBittorrent paths → Vault paths
 	// LinkDir holds hard-link trees for torrents with files renamed in
 	// qBittorrent: Abs(TorrentsDir)/.qbt-import.
 	LinkDir string
@@ -99,7 +101,8 @@ func ImportQBittorrent(ctx context.Context, o QBOptions, eng TorrentEngine, lib 
 	if o.VerifyTimeout <= 0 {
 		o.VerifyTimeout = defaultVerifyTimeout
 	}
-	im := &qbImport{o: o, eng: eng, lib: lib, rep: rep, qb: newQBClient(o), log: slog.Default().With("component", "migrate")}
+	qb := newQBClient(o)
+	im := &qbImport{o: o, eng: eng, lib: lib, rep: rep, qb: qb, bk: newQBBackup(o, qb), log: slog.Default().With("component", "migrate")}
 	return im.run(ctx)
 }
 
@@ -109,6 +112,7 @@ type qbImport struct {
 	lib LibraryFiles
 	rep *Report
 	qb  *qbClient
+	bk  qbBackup
 	log *slog.Logger
 
 	index map[fileKey][]library.File // library files by inode, built on first use
@@ -144,7 +148,7 @@ func connectQB(ctx context.Context, o QBOptions, qb *qbClient) error {
 }
 
 func noAPIReason(o QBOptions) string {
-	addr := o.WebURL
+	addr := redactURL(o.WebURL)
 	if addr == "" {
 		addr = "адрес не задан"
 	}
@@ -165,23 +169,19 @@ func (im *qbImport) run(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		im.log.Warn("qbittorrent api", "url", im.o.WebURL, "err", err)
+		im.log.Warn("qbittorrent api", "url", redactURL(im.o.WebURL), "err", err)
 		im.fail(head, noAPIReason(im.o))
 		return nil
 	}
-	entries, err := os.ReadDir(im.o.BTBackupDir)
-	if err != nil {
-		im.log.Warn("qbittorrent BT_backup", "dir", im.o.BTBackupDir, "err", err)
-		im.fail(head, fmt.Sprintf("Не удалось прочитать папку BT_backup (%s) — раздачи не перенесены", im.o.BTBackupDir))
+	names, reason, err := im.bk.list(ctx)
+	if reason != "" {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		im.log.Warn("qbittorrent torrents", "dir", im.o.BTBackupDir, "api", im.o.FromAPI, "err", err)
+		im.fail(head, reason)
 		return nil
 	}
-	var names []string
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".torrent") {
-			names = append(names, e.Name())
-		}
-	}
-	sort.Strings(names)
 	for _, n := range names {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -266,13 +266,16 @@ func percent(done, total int64) int64 {
 	return done * 100 / total
 }
 
-func (im *qbImport) one(ctx context.Context, fileName string) error {
-	stem := strings.TrimSuffix(fileName, ".torrent")
+func (im *qbImport) one(ctx context.Context, stem string) error {
+	fileName := stem + ".torrent"
 	l := Line{Name: fileName}
-	meta, err := os.ReadFile(filepath.Join(im.o.BTBackupDir, fileName))
-	if err != nil {
+	meta, reason, err := im.bk.torrent(ctx, stem)
+	if reason != "" {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		im.log.Warn("qbittorrent: read torrent", "file", fileName, "err", err)
-		im.fail(l, "Не удалось прочитать файл торрента")
+		im.fail(l, reason)
 		return nil
 	}
 	mi, err := metainfo.Load(bytes.NewReader(meta))
@@ -295,14 +298,15 @@ func (im *qbImport) one(ctx context.Context, fileName string) error {
 	}
 
 	// 1. qBittorrent's state of the torrent.
-	fr, err := readFastresume(filepath.Join(im.o.BTBackupDir, stem+".fastresume"))
-	if errors.Is(err, os.ErrNotExist) {
-		im.fail(l, "Нет файла состояния qBittorrent")
-		return nil
-	}
-	if err != nil {
-		im.log.Warn("qbittorrent: parse fastresume", "file", stem+".fastresume", "err", err)
-		im.fail(l, "Файл состояния qBittorrent не читается")
+	fr, reason, err := im.bk.resume(ctx, stem)
+	if reason != "" {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			im.log.Warn("qbittorrent: torrent state", "torrent", stem, "err", err)
+		}
+		im.fail(l, reason)
 		return nil
 	}
 	if fr.name != "" {

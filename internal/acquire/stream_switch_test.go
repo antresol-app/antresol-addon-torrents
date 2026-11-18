@@ -213,3 +213,159 @@ func TestPruneDropsIdleEmptyStream(t *testing.T) {
 		t.Fatalf("removed %v", eng.removed)
 	}
 }
+
+// streamAs is streamEpisode asked by profile uid.
+func streamAs(t *testing.T, e *env, ih string, episode int, uid string) {
+	t.Helper()
+	e.idx.resp = indexer.SearchResponse{Releases: []indexer.ScoredRelease{relx("Теория большого взрыва S01", "https://t/"+ih, 1, 5)}}
+	e.eng.nextIH = ih
+	e.eng.nextFiles = []torrent.FileInfo{
+		{Index: 0, Path: "TBBT.S01/TBBT.S01E03.mkv", Size: 800},
+		{Index: 1, Path: "TBBT.S01/TBBT.S01E04.mkv", Size: 800},
+	}
+	res, err := e.svc.Acquire(context.Background(), AcquireRequest{TMDBID: 1418, Kind: KindSeries, Season: 1, Episode: episode, Mode: ModeStream, UserID: 1, UserUID: uid})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.InfoHash != ih {
+		t.Fatalf("stream %s, want %s", res.InfoHash, ih)
+	}
+}
+
+// Another viewer opening the same episode from another source does not
+// take the first viewer's stream away, paused (no reader) or playing; the
+// first viewer's own switch still replaces it.
+func TestStreamSwitchScopedToViewer(t *testing.T) {
+	grace := shortGrace(t)
+	e := newEnv(t)
+	streamAs(t, e, ihSwitchA, 3, "uid-one")
+	streamAs(t, e, ihSwitchB, 3, "uid-two")
+	if isRemoved(e, ihSwitchA) {
+		t.Fatal("another viewer's paused stream was replaced")
+	}
+	release := e.disk.Use(ihSwitchB)
+	streamAs(t, e, ihSwitchC, 3, "uid-one") // viewer one switches: A goes
+	if !isRemoved(e, ihSwitchA) {
+		t.Fatal("the viewer's own previous stream kept")
+	}
+	release()
+	time.Sleep(3 * grace)
+	if isRemoved(e, ihSwitchB) || isRemoved(e, ihSwitchC) {
+		t.Fatalf("removed %v", e.eng.removed)
+	}
+}
+
+// A stream both viewers watch goes only once neither references it.
+func TestStreamSwitchSharedStreamKeptWhileReferenced(t *testing.T) {
+	e := newEnv(t)
+	streamAs(t, e, ihSwitchA, 3, "uid-one")
+	streamAs(t, e, ihSwitchA, 3, "uid-two")
+	streamAs(t, e, ihSwitchB, 3, "uid-one")
+	if isRemoved(e, ihSwitchA) {
+		t.Fatal("a stream another viewer watches was replaced")
+	}
+	streamAs(t, e, ihSwitchB, 3, "uid-two")
+	if !isRemoved(e, ihSwitchA) {
+		t.Fatal("a stream nobody watches any more was kept")
+	}
+}
+
+// The identity of a stream is what it is watched for, not what it was
+// first added for: a pack streamed for E03 then E04 is replaced by another
+// source of E04, not of E03.
+func TestStreamSwitchPackIdentityPerRequest(t *testing.T) {
+	e := newEnv(t)
+	streamEpisode(t, e, ihSwitchA, 3)
+	streamEpisode(t, e, ihSwitchA, 4)
+	streamEpisode(t, e, ihSwitchC, 3)
+	if isRemoved(e, ihSwitchA) {
+		t.Fatal("the E04 stream was replaced by a source of E03")
+	}
+	streamEpisode(t, e, ihSwitchB, 4)
+	if !isRemoved(e, ihSwitchA) {
+		t.Fatal("the E04 stream kept after another source of E04")
+	}
+}
+
+// A delayed drop re-checks before removing: a viewer back on the stream
+// keeps it; Close stops the pending drops; one timer per stream.
+func TestSupersededDropRechecksAndStops(t *testing.T) {
+	grace := shortGrace(t)
+	eng := newFakeEngine()
+	eng.put(torrent.Status{InfoHash: "a", Mode: torrent.ModeStream})
+	eng.put(torrent.Status{InfoHash: "b", Mode: torrent.ModeStream})
+	d := &Disk{Root: "/", Engine: eng}
+	d.dropSuperseded = func(ih string, at time.Time) { _ = d.dropDue(context.Background(), ih, at) }
+	for range 5 {
+		d.Use("a")()
+	}
+	d.Supersede("a")
+	d.mu.Lock()
+	n := len(d.timers)
+	d.mu.Unlock()
+	if n != 1 {
+		t.Fatalf("%d timers", n)
+	}
+	d.Watching("a", "uid-two", StreamItem{Kind: KindMovie, TMDBID: 1}) // watched again
+	time.Sleep(3 * grace)
+	if isRemovedEng(eng, "a") {
+		t.Fatal("a superseded stream a viewer watches again was removed")
+	}
+	// the check is in the removal's critical section: a due timer whose
+	// stream was touched since is not acted on
+	d.Supersede("b")
+	d.mu.Lock()
+	at := d.lastUsed["b"]
+	d.mu.Unlock()
+	d.Touch("b")
+	if err := d.dropDue(context.Background(), "b", at); err == nil || isRemovedEng(eng, "b") {
+		t.Fatal("a stream touched after its timer was set was dropped")
+	}
+	d.Supersede("b")
+	d.Close()
+	time.Sleep(3 * grace)
+	if isRemovedEng(eng, "b") {
+		t.Fatal("a delayed drop ran after Close")
+	}
+}
+
+func isRemovedEng(eng *fakeEngine, ih string) bool {
+	eng.mu.Lock()
+	defer eng.mu.Unlock()
+	return eng.removed[ih]
+}
+
+// The removal of a stream does not hold Disk's lock: other streams are
+// read meanwhile; a reader of the stream being removed waits for it.
+func TestDropStreamDoesNotBlockOthers(t *testing.T) {
+	eng := newFakeEngine()
+	eng.put(torrent.Status{InfoHash: "a", Mode: torrent.ModeStream})
+	d := &Disk{Root: "/", Engine: eng}
+	inRemove, finish := make(chan struct{}), make(chan struct{})
+	eng.beforeRm = func(_ *fakeEngine, ih string) {
+		close(inRemove)
+		<-finish
+	}
+	errc := make(chan error, 1)
+	go func() { errc <- d.DropStream(context.Background(), "a") }()
+	<-inRemove
+	used := make(chan struct{})
+	go func() { d.Use("other")(); d.Touch("other"); close(used) }()
+	select {
+	case <-used:
+	case <-time.After(2 * time.Second):
+		t.Fatal("another stream's read waited for the removal")
+	}
+	waited := make(chan struct{})
+	go func() { d.Use("a")(); close(waited) }()
+	select {
+	case <-waited:
+		t.Fatal("a reader of the stream being removed did not wait")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(finish)
+	if err := <-errc; err != nil {
+		t.Fatal(err)
+	}
+	<-waited
+}

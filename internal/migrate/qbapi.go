@@ -32,9 +32,7 @@ func newQBClient(o QBOptions) *qbClient {
 		stopTimeout: o.StopTimeout,
 		poll:        500 * time.Millisecond,
 	}
-	if c.http == nil {
-		c.http = &http.Client{Timeout: 30 * time.Second}
-	}
+	c.http = sameHostClient(c.http, 30*time.Second)
 	if c.stopTimeout <= 0 {
 		c.stopTimeout = 10 * time.Second
 	}
@@ -46,17 +44,30 @@ func newQBClient(o QBOptions) *qbClient {
 // session expired, e.g. during a long hash check) logs in again once and
 // repeats the request.
 func (c *qbClient) do(ctx context.Context, method, path string, query, form url.Values) (int, []byte, *http.Response, error) {
-	code, b, resp, err := c.send(ctx, method, path, query, form)
+	return c.doN(ctx, method, path, query, form, 1<<20)
+}
+
+// doN is do with up to limit bytes of the body (a .torrent file can be
+// bigger than 1 MiB).
+func (c *qbClient) doN(ctx context.Context, method, path string, query, form url.Values, limit int64) (int, []byte, *http.Response, error) {
+	code, b, resp, err := c.sendN(ctx, method, path, query, form, limit)
 	if err == nil && code == http.StatusForbidden && c.user != "" && path != loginPath {
 		if lerr := c.login(ctx); lerr != nil {
+			if errors.Is(lerr, errQBLoginBlocked) {
+				return 0, nil, nil, lerr
+			}
 			return code, b, resp, nil
 		}
-		return c.send(ctx, method, path, query, form)
+		return c.sendN(ctx, method, path, query, form, limit)
 	}
 	return code, b, resp, err
 }
 
 func (c *qbClient) send(ctx context.Context, method, path string, query, form url.Values) (int, []byte, *http.Response, error) {
+	return c.sendN(ctx, method, path, query, form, 1<<20)
+}
+
+func (c *qbClient) sendN(ctx context.Context, method, path string, query, form url.Values, limit int64) (int, []byte, *http.Response, error) {
 	u := c.base + path
 	if len(query) > 0 {
 		u += "?" + query.Encode()
@@ -79,19 +90,34 @@ func (c *qbClient) send(ctx context.Context, method, path string, query, form ur
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
+		var ue *url.Error
+		if errors.As(err, &ue) {
+			ue.URL = redactURL(ue.URL) // it ends up in logs and report lines
+		}
 		return 0, nil, nil, err
 	}
 	defer resp.Body.Close()
-	b, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	b, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
 		return resp.StatusCode, nil, resp, err
+	}
+	if int64(len(b)) > limit {
+		return resp.StatusCode, nil, resp, errQBTooLarge
 	}
 	return resp.StatusCode, b, resp, nil
 }
 
-func statusErr(path string, code int) error {
-	return fmt.Errorf("qBittorrent ответил %d на %s", code, path)
+// qbStatusError: qBittorrent answered with an HTTP status other than 200.
+type qbStatusError struct {
+	path string
+	code int
 }
+
+func (e *qbStatusError) Error() string {
+	return fmt.Sprintf("qBittorrent ответил %d на %s", e.code, e.path)
+}
+
+func statusErr(path string, code int) error { return &qbStatusError{path: path, code: code} }
 
 // login signs in when a user name is set (otherwise qBittorrent is expected
 // to let this address in without one).
@@ -104,11 +130,14 @@ func (c *qbClient) login(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if code == http.StatusForbidden {
+		return errQBLoginBlocked // not a wrong password: qBittorrent bans an address after failed logins
+	}
 	if code != http.StatusOK {
 		return statusErr(path, code)
 	}
 	if strings.TrimSpace(string(b)) != "Ok." {
-		return fmt.Errorf("qBittorrent не принял имя пользователя или пароль")
+		return errQBLogin
 	}
 	c.cookies = resp.Cookies()
 	return nil
@@ -155,6 +184,17 @@ func (c *qbClient) start(ctx context.Context, ih string) error {
 }
 
 const loginPath = "/api/v2/auth/login"
+
+// errQBLogin: qBittorrent refused the user name or the password.
+var errQBLogin = errors.New("qBittorrent не принял имя пользователя или пароль")
+
+// errQBLoginBlocked: qBittorrent answered the login with 403 — it bans an
+// address for an hour after several failed logins (and answers 403 to
+// everything meanwhile).
+var errQBLoginBlocked = errors.New("qBittorrent отказал во входе (403): адрес, вероятно, временно заблокирован")
+
+// errQBTooLarge: an answer is bigger than the limit read from it.
+var errQBTooLarge = errors.New("qBittorrent: ответ слишком большой")
 
 // errNotInQB: qBittorrent does not have the torrent (any more).
 var errNotInQB = errors.New("qBittorrent: раздачи нет")

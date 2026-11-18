@@ -4,7 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"regexp"
 	"slices"
+	"strconv"
 
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/release"
 	"github.com/antresol-app/antresol-addon-torrents/internal/indexer"
@@ -32,13 +36,16 @@ type PendingAcquisition struct {
 // a range of seasons once per season («S01-S03»), else its season or
 // episode range (coverage). Streams are left out (they are never
 // organized; a stream that is kept turns into a download), and so are rows
-// whose torrent is gone and rows whose organize failed for good
-// (maxOrganizeAttempts: the follow may look for those episodes again).
+// whose torrent is gone. A download whose organize failed for good
+// (maxOrganizeAttempts) still covers what it holds while its files are on
+// the disk — the admin sees the failure in «Загрузки» and in the notice,
+// and a retry places them; looking for them again would download the same
+// episodes once more — and stops covering once its files are gone.
 func (s *Service) Pending(ctx context.Context) ([]PendingAcquisition, error) {
-	rows, err := s.o.DB.QueryContext(ctx, `SELECT a.kind, a.tmdb_id, a.season, a.episode, a.infohash, t.name, t.release_json, a.meta_json
+	rows, err := s.o.DB.QueryContext(ctx, `SELECT a.kind, a.tmdb_id, a.season, a.episode, a.infohash, t.name, t.release_json, a.meta_json,
+		t.save_dir, a.organize_error != '' AND a.organize_attempts >= ?
 		FROM acquisitions a JOIN torrents t ON lower(t.infohash)=lower(a.infohash)
 		WHERE a.organized_at IS NULL AND t.mode<>'stream'
-		AND NOT (a.organize_error != '' AND a.organize_attempts >= ?)
 		ORDER BY a.created_at, a.infohash`, maxOrganizeAttempts)
 	if err != nil {
 		return nil, err
@@ -49,9 +56,13 @@ func (s *Service) Pending(ctx context.Context) ([]PendingAcquisition, error) {
 		var p PendingAcquisition
 		var name string
 		var rel sql.NullString
-		var meta string
-		if err := rows.Scan(&p.Kind, &p.TMDBID, &p.Season, &p.Episode, &p.InfoHash, &name, &rel, &meta); err != nil {
+		var meta, saveDir string
+		var failed bool
+		if err := rows.Scan(&p.Kind, &p.TMDBID, &p.Season, &p.Episode, &p.InfoHash, &name, &rel, &meta, &saveDir, &failed); err != nil {
 			return nil, err
+		}
+		if failed && !s.dataOnDisk(p.InfoHash, saveDir, name) {
+			continue // nothing left to place: those are wanted again
 		}
 		var m acquisitionMeta
 		if p.Kind == KindSeries && meta != "" {
@@ -104,8 +115,17 @@ func coverage(p *PendingAcquisition, name, rel string) {
 			continue
 		}
 		info := release.Parse(t)
+		if se, ep := dashSeasonEpisode(t); se > 0 {
+			// «S3 - 08»: one episode, not the whole season
+			info.Season, info.Episode, info.EpisodeEnd = se, ep, ep
+		}
 		if info.Season > 0 && p.Season > 0 && info.Season != p.Season {
 			continue
+		}
+		if p.Season == 0 && info.Season > 0 {
+			// a download asked for with no season (a hand-picked release)
+			// covers the season its name tells, not the whole series
+			p.Season = info.Season
 		}
 		switch {
 		case info.Episode > 0 && info.EpisodeEnd > info.Episode:
@@ -116,6 +136,10 @@ func coverage(p *PendingAcquisition, name, rel string) {
 			return
 		case info.Season > 0 && info.Episode == 0:
 			p.Episode, p.EpisodeEnd = 0, 0 // the whole season
+			return
+		case info.Episode > 0 && p.Episode == 0 && info.Season == p.Season:
+			// one episode picked with no episode asked for: that episode
+			p.Episode, p.EpisodeEnd = info.Episode, 0
 			return
 		}
 	}
@@ -171,9 +195,67 @@ func seasonsNamed(name, rel string) (lo, hi int) {
 		if t == "" {
 			continue
 		}
+		if se, _ := dashSeasonEpisode(t); se > 0 {
+			return 0, 0 // «S3 - 08»: season 3, episode 8
+		}
 		if lo, hi = indexer.SeasonRange(t); lo > 0 {
 			return lo, hi
 		}
 	}
 	return 0, 0
+}
+
+// reDashSeasonEpisode is the anime-style «S3 - 08»: a season, then the
+// episode after a spaced dash (a range of seasons says «S1-S3», «S1-3» or
+// «Seasons 1 - 3»).
+var reDashSeasonEpisode = regexp.MustCompile(`(?i)(?:^|[\s\[(._])S(\d{1,2})\s+-\s+(\d{1,4})(?:v\d)?(?:$|[\s\[(.])`)
+
+// dashSeasonEpisode is the season and episode of an «S3 - 08» name, 0, 0
+// for any other.
+func dashSeasonEpisode(title string) (season, episode int) {
+	m := reDashSeasonEpisode.FindStringSubmatch(title)
+	if m == nil {
+		return 0, 0
+	}
+	season, _ = strconv.Atoi(m[1])
+	episode, _ = strconv.Atoi(m[2])
+	if season <= 0 || episode <= 0 {
+		return 0, 0
+	}
+	return season, episode
+}
+
+// dataOnDisk: some of torrent ih's files are on the disk (its selected
+// files once the engine knows them, else its top folder or file in
+// saveDir).
+func (s *Service) dataOnDisk(ih, saveDir, name string) bool {
+	exists := func(p string) bool {
+		_, err := os.Stat(p)
+		return err == nil
+	}
+	if s.o.Engine != nil {
+		if h, ok := s.o.Engine.Get(ih); ok && h != nil {
+			if h.Status().DataMissing {
+				return false
+			}
+			known := false
+			for _, f := range h.Files() {
+				if !f.Selected {
+					continue
+				}
+				known = true
+				p := f.FullPath
+				if p == "" {
+					p = filepath.Join(saveDir, filepath.FromSlash(f.Path))
+				}
+				if exists(p) {
+					return true
+				}
+			}
+			if known {
+				return false
+			}
+		}
+	}
+	return name != "" && saveDir != "" && exists(filepath.Join(saveDir, name))
 }

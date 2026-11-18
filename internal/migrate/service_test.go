@@ -285,7 +285,8 @@ func TestDiscoverSources(t *testing.T) {
 			}
 			continue
 		}
-		if st.Found || !strings.HasPrefix(st.Detail, "Не найден — смонтируйте ") || !strings.HasSuffix(st.Detail, st.Path) {
+		// each can be reached over its API instead: the card says so
+		if st.Found || !strings.HasPrefix(st.Detail, "Не подключён — укажите адрес или смонтируйте ") || !strings.HasSuffix(st.Detail, st.Path) {
 			t.Fatalf("%s %+v", st.ID, st)
 		}
 	}
