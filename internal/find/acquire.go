@@ -54,7 +54,7 @@ func (h *handlers) acquire(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if u.IsAdmin && req.Mode == acquire.ModeDownload && h.Approve != nil {
-		// «Одобрить» of «Просьбы» is this download (from there or from anywhere)
+		// «Одобрить» of «Запросы» is this download (from there or from anywhere)
 		// (the download runs whatever the tab does next: so does the approve)
 		a := addonkit.ApproveRequest{AdminID: u.ID, Kind: req.Kind, TMDBID: req.TMDBID, ExtID: req.ExtID, Title: req.Title, Artist: req.Artist}
 		actx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), approveTimeout)

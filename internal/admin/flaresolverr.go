@@ -15,7 +15,8 @@ import (
 // FlareSolverr in «Настройки загрузок»: the address the sources behind
 // Cloudflare go through. Saved only once it answers as FlareSolverr; the
 // saved address wins over the server's ANTRESOL_TORRENTS_FLARESOLVERR_URL,
-// and clearing it falls back to that one.
+// and clearing it falls back to that one, then to the helper service
+// found on its compose name.
 
 // flareSolverrView is the answer of PUT /api/admin/settings/flaresolverr.
 type flareSolverrView struct {
@@ -114,6 +115,9 @@ func (s *settings) putFlareSolverr(w http.ResponseWriter, r *http.Request) {
 		effective := u
 		if effective == "" {
 			effective = s.FlareSolverrServer
+		}
+		if effective == "" {
+			effective = s.FlareSolverrHelper.Address() // "" while not found
 		}
 		s.Sources.SetFlareSolverr(effective)
 		go s.Sources.RecheckFailed(context.WithoutCancel(r.Context()))

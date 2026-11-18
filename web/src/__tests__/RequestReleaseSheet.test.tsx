@@ -1,4 +1,4 @@
-// «Одобрить» in «Просьбы» (requestActions): the release picker of the
+// «Одобрить» in «Запросы» (requestActions): the release picker of the
 // requested title; the core hears onApproved once the download was added,
 // onClose when the admin cancels.
 import { afterEach, describe, expect, it, vi } from 'vitest'

@@ -69,6 +69,9 @@ type Deps struct {
 	// FlareSolverrServer: the server's ANTRESOL_TORRENTS_FLARESOLVERR_URL
 	// ("" = none), used while no address is saved in the settings.
 	FlareSolverrServer string
+	// FlareSolverrHelper (optional) watches the FlareSolverr helper
+	// service the manifest declares, used while neither address is set.
+	FlareSolverrHelper *addonkit.HelperWatch
 	// SolverHTTP (optional) checks a FlareSolverr address (default
 	// http.DefaultClient; a field for tests).
 	SolverHTTP *http.Client

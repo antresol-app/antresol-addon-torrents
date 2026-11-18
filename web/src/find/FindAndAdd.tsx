@@ -279,7 +279,7 @@ type Acquire = Pick<ReturnType<typeof useAcquire>, 'state' | 'run' | 'reset'>
 
 /**
  * The release sheet of a film (of the search results, or of «Одобрить» in
- * «Просьбы»): «Лучший релиз» and the table; a started download calls
+ * «Запросы»): «Лучший релиз» and the table; a started download calls
  * onStarted(true). acq is the caller's useAcquire (its row shows the result).
  */
 export function VideoReleaseSheet({
@@ -423,7 +423,7 @@ function mediaTarget(c: Candidate): AcquireTarget {
 
 /**
  * «Выбрать релиз…» of an album, book, audiobook or manga (of the search
- * results, or of «Одобрить» in «Просьбы»): the release table, and for music
+ * results, or of «Одобрить» in «Запросы»): the release table, and for music
  * the track step in the same sheet. It closes once the download started.
  * owned: the library has the album (only «Выбрать треки…», to add songs);
  * best: a «Лучший релиз» row on top (the server picks, as «На сервер» does).

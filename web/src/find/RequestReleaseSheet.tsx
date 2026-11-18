@@ -1,4 +1,4 @@
-// «Управление → Просьбы»: «Одобрить» opens the release picker of «Найти и
+// «Управление → Запросы»: «Одобрить» opens the release picker of «Найти и
 // добавить» for the requested title (requestActions; the core opens the
 // first visible one). The download it starts approves the request on the
 // server; once the server took it, onApproved (the core reloads the list

@@ -9,6 +9,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	_ "embed"
 	"errors"
 	"fmt"
 	"log"
@@ -40,6 +41,26 @@ import (
 	"github.com/antresol-app/antresol-addon-torrents/internal/watch"
 	"github.com/antresol-app/antresol/addonkit"
 )
+
+// manifestJSON is the addon's own manifest: its helper services.
+//
+//go:embed antresol-addon.json
+var manifestJSON []byte
+
+// solverHelper is the watch over the FlareSolverr helper service the
+// manifest declares (nil: none declared).
+func solverHelper(manifest []byte) (*addonkit.HelperWatch, error) {
+	hs, err := addonkit.HelpersFromManifest(manifest)
+	if err != nil {
+		return nil, err
+	}
+	for _, h := range hs {
+		if h.Name == "flaresolverr" {
+			return &addonkit.HelperWatch{Helper: h}, nil
+		}
+	}
+	return nil, nil
+}
 
 func main() {
 	boot.SetProcessStart(time.Now())
@@ -178,6 +199,15 @@ func main() {
 		// that does not answer shows in /health while not ready
 		svc.OnNotReady = func(err error) { status.fail(fmt.Errorf("holds push: %w", err)) }
 		svc.Loops = append(svc.Loops, pusher.Run)
+		// FlareSolverr on its compose name, while the admin gave no address
+		solver, err := solverHelper(manifestJSON)
+		if err != nil {
+			log.Printf("%s: manifest helpers: %v", env.ID, err)
+		}
+		if solver != nil {
+			sw := boot.NewSolverWatch(solver, svc.Sources, svc.Settings.FlareSolverrURL, conf.FlareSolverr)
+			svc.Loops = append(svc.Loops, sw.Run)
+		}
 		svc.OnReady = func() {
 			// the admin routes (paths /api/admin/…, as the proxy delivers
 			// them) serve once the holds are with the core
@@ -189,7 +219,7 @@ func main() {
 			adminAPI.set(admin.Routes(admin.Deps{
 				Acquire: svc.Acq, Sources: svc.Sources, Settings: svc.Settings, NoSeed: svc.NoSeed,
 				Upload: svc.Engine, StreamCacheDefaultGB: float64(conf.StreamCacheBytes) / (1 << 30),
-				ProwlarrDB: conf.ProwlarrDB, FlareSolverrServer: conf.FlareSolverr, Outside: pusher.LastOutside,
+				ProwlarrDB: conf.ProwlarrDB, FlareSolverrServer: conf.FlareSolverr, FlareSolverrHelper: solver, Outside: pusher.LastOutside,
 				Watched: core.Watched, Languages: profiles.Languages, AcquireFiles: files, Stats: stats,
 				Migrate: migrateapi.Routes(migrateapi.Deps{Migrate: svc.Migrate}),
 			}))

@@ -8,27 +8,33 @@ separate addon with its own repository and releases, not part of the core.
 ## Sites behind Cloudflare (FlareSolverr)
 
 Some trackers (RuTracker, for one) sit behind Cloudflare's bot check. The
-addon gets past it through [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr).
-Run it beside Antresol, e.g. in the same `compose.yml`:
+addon gets past it through [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr),
+a helper service its manifest declares (`helpers`). Add it to the same
+`compose.yml` as Antresol, under `services:`, with no `ports:`:
 
 ```yaml
   flaresolverr:
-    image: ghcr.io/flaresolverr/flaresolverr:latest
-    container_name: flaresolverr
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
     restart: unless-stopped
 ```
 
-then enter its address (`http://flaresolverr:8191`) in «Управление →
-Настройки загрузок → FlareSolverr» and press «Сохранить»: it is saved once it
-answers, and the sources that failed are checked again. The server's
-`ANTRESOL_TORRENTS_FLARESOLVERR_URL` still works and applies while no address
-is saved there.
+and run `docker compose up -d`. The addon finds it by its service name
+(`http://flaresolverr:8191`) within half a minute, with nothing to enter;
+«Управление → Настройки загрузок → FlareSolverr» then says «Найден рядом с
+сервером», and the sources that failed are checked again. While it is not
+found, that row shows the same block.
+
+An address wins over the one found, in this order: the one saved in that
+field (saved once it answers), then the server's
+`ANTRESOL_TORRENTS_FLARESOLVERR_URL`. Use one when FlareSolverr already runs
+elsewhere on the network, or when the server is not in Docker; clearing the
+field falls back to the next one.
 
 ## Layout
 
 | Path | What |
 | --- | --- |
-| `antresol-addon.json` | the manifest (`access: "adults"`, the `files.*` hooks; the build fills in `platforms` and `web`) |
+| `antresol-addon.json` | the manifest (`access: "adults"`, the `files.*` hooks, the FlareSolverr helper; the build fills in `platforms` and `web`; `main.go` embeds it) |
 | `main.go`, `addon.go` | the program on `addonkit`: `GET /health` (`addonkit.Ready`), the hooks at `/hooks/` |
 | `internal/corecopy/` | core helper packages copied by `tools/corecopy.sh` from `tools/corecopy.list`; generated, never edited |
 | `tools/corecopy.sh` | the copy (`make corecopy`) and its check (`--check`, run by `make test` and `TestCorecopyInSync` when there is a core checkout) |

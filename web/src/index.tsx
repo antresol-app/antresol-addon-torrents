@@ -49,10 +49,11 @@ registerAddon(ID, {
   // its card on the core's «Управление → Переезд», after the media servers
   migrateSources: [{ id: 'torrents', name: k('migrate.addon.sources'), icon: 'arrowRight', to: 'migrate', admin: true }],
   manageTiles: [
-    { label: k('common.downloads'), icon: 'download', to: 'downloads', admin: true },
-    { label: k('manage.section.sources'), icon: 'plug', to: 'sources', admin: true },
-    { label: k('tsettings.title'), icon: 'gear', to: 'settings', admin: true },
-    { label: k('follows.manage'), icon: 'eye', to: 'manage/follows', admin: true },
+    // «Загрузки и источники» of «Управление», tile glyphs of the core's set
+    { label: k('common.downloads'), icon: 'arrowDownCircle', tint: 'green', group: 'downloads', to: 'downloads', admin: true },
+    { label: k('manage.section.sources'), icon: 'antenna', tint: 'orange', group: 'downloads', to: 'sources', admin: true },
+    { label: k('tsettings.title'), icon: 'sliders', tint: 'gray', group: 'downloads', to: 'settings', admin: true },
+    { label: k('follows.manage'), icon: 'eye', tint: 'indigo', group: 'downloads', to: 'manage/follows', admin: true },
   ],
   // «Мои слежения» for adults who are not the admin (the admin has «Управление → Слежение»)
   profileMenu: [{ label: k('follows.mine'), icon: 'eye', to: 'follows', visible: (u) => !u.isAdmin }],
@@ -68,7 +69,7 @@ registerAddon(ID, {
   })),
   // the admins' count of running downloads beside the navigation («Загрузки: N»)
   navBadges: [{ to: 'downloads', icon: 'download', label: k('badge.label'), useCount: useActiveDownloads, admin: true }],
-  // «Одобрить» in «Просьбы»: the release picker of the requested title
+  // «Одобрить» in «Запросы»: the release picker of the requested title
   requestActions: [{ element: RequestReleaseSheet }],
   statsBlocks: [{ element: SeedingStats, admin: true }],
   // «Следить» is a round button of the action row (a tile on a phone); under

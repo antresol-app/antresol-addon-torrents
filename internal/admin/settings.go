@@ -48,6 +48,9 @@ type settingsView struct {
 	// writes it); FlareSolverrServer: the server's, used while none is saved.
 	FlareSolverrURL    string `json:"flareSolverrUrl"`
 	FlareSolverrServer string `json:"flareSolverrServer"`
+	// FlareSolverrHelper: the helper service on its compose name, while
+	// no address is set (override: one is); absent without one declared.
+	FlareSolverrHelper *addonkit.HelperStatus `json:"flareSolverrHelper,omitempty"`
 }
 
 // settingsIn is a PUT's body: a field left out keeps its value; noSeeding*,
@@ -134,6 +137,10 @@ func (s *settings) load(r *http.Request) (settingsView, releaseprefs.Prefs, erro
 		return v, p, err
 	}
 	v.FlareSolverrServer = s.FlareSolverrServer
+	if s.FlareSolverrHelper != nil {
+		st := s.FlareSolverrHelper.Status(v.FlareSolverrURL != "" || v.FlareSolverrServer != "")
+		v.FlareSolverrHelper = &st
+	}
 	if s.Outside != nil {
 		n := s.Outside()
 		v.OutsideFileRoots = &n

@@ -10,10 +10,10 @@ require (
 	github.com/anacrolix/generics v0.2.0
 	github.com/anacrolix/torrent v1.61.0
 	github.com/andybalholm/cascadia v1.3.4
-	// go.sum keeps addonkit v0.1.0's two h1 lines (the build from the
+	// go.sum keeps addonkit v0.3.0's two h1 lines (the build from the
 	// addon's own repository checks them); in the core repository the
 	// replace makes them unused, so go mod tidy there would drop them
-	github.com/antresol-app/antresol/addonkit v0.1.0
+	github.com/antresol-app/antresol/addonkit v0.3.0
 	github.com/bodgit/sevenzip v1.6.5
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
 	github.com/dlclark/regexp2 v1.12.0

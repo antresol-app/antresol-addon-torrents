@@ -52,4 +52,25 @@ describe('FlareSolverrRow', () => {
     render(<FlareSolverrRow saved="" server="http://solver:8191" />)
     expect(screen.getByText('Сейчас используется адрес с сервера: http://solver:8191')).toBeInTheDocument()
   })
+
+  it('names the helper service found on its compose name', () => {
+    stub(() => json({}))
+    render(<FlareSolverrRow saved="" server="" helper={{ name: 'flaresolverr', source: 'compose', address: 'http://flaresolverr:8191' }} />)
+    expect(screen.getByText('Найден рядом с сервером: http://flaresolverr:8191')).toBeInTheDocument()
+    expect(screen.queryByTestId('solver-compose')).not.toBeInTheDocument()
+  })
+
+  it('with nothing set and no helper found, shows the block to add to compose.yml', () => {
+    stub(() => json({}))
+    const compose = '  flaresolverr:\n    image: img:1\n    restart: unless-stopped\n'
+    render(<FlareSolverrRow saved="" server="" helper={{ name: 'flaresolverr', source: 'none', address: 'http://flaresolverr:8191', compose }} />)
+    expect(screen.getByText('Не найден: сайты за защитой Cloudflare не работают.')).toBeInTheDocument()
+    expect(screen.getByTestId('solver-compose')).toHaveTextContent('image: img:1')
+  })
+
+  it('a saved address hides the helper block', () => {
+    stub(() => json({}))
+    render(<FlareSolverrRow saved="http://nas:8191" server="" helper={{ name: 'flaresolverr', source: 'override' }} />)
+    expect(screen.queryByTestId('solver-compose')).not.toBeInTheDocument()
+  })
 })

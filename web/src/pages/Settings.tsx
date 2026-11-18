@@ -14,7 +14,7 @@ import { useT } from '../i18n'
 import { LANGS, langLabel } from '../langs'
 import { RankedList } from '../RankedList'
 import { setTitle } from '../title'
-import type { AdminSettings, EngineStatus, LangCode, MusicFormat, Mp3Bitrate, Voice } from '../types'
+import type { AdminSettings, EngineStatus, HelperStatus, LangCode, MusicFormat, Mp3Bitrate, Voice } from '../types'
 import m from './Manage.module.css'
 import styles from './Settings.module.css'
 
@@ -268,7 +268,7 @@ export function Settings() {
       </GroupedSection>
 
       <GroupedSection title={t('tsettings.solver.group')}>
-        <FlareSolverrRow saved={values.flareSolverrUrl ?? ''} server={values.flareSolverrServer ?? ''} />
+        <FlareSolverrRow saved={values.flareSolverrUrl ?? ''} server={values.flareSolverrServer ?? ''} helper={values.flareSolverrHelper} />
       </GroupedSection>
     </section>
   )
@@ -278,9 +278,11 @@ export function Settings() {
  * «FlareSolverr»: the address of the service that gets past Cloudflare for
  * the sources behind it. «Сохранить» saves it only once it answers as
  * FlareSolverr; an empty field removes it (the server's address, if any,
- * applies then). Its own endpoint, never the page's autosave.
+ * applies then, else the helper service found on its compose name). Its
+ * own endpoint, never the page's autosave. With no address at all and no
+ * helper found, the row shows the block to add to compose.yml.
  */
-export function FlareSolverrRow({ saved, server }: { saved: string; server: string }) {
+export function FlareSolverrRow({ saved, server, helper }: { saved: string; server: string; helper?: HelperStatus }) {
   const t = useT()
   const [value, setValue] = useState(saved)
   const [current, setCurrent] = useState(saved)
@@ -302,7 +304,19 @@ export function FlareSolverrRow({ saved, server }: { saved: string; server: stri
       setBusy(false)
     }
   }
-  const status = done || (current ? '' : server ? t('tsettings.solver.server', { url: server }) : t('tsettings.solver.none'))
+  const found = helper?.source === 'compose' && helper.address ? helper.address : ''
+  const missing = !current && !server && helper?.source === 'none' && helper.compose ? helper.compose : ''
+  const status =
+    done ||
+    (current
+      ? ''
+      : server
+        ? t('tsettings.solver.server', { url: server })
+        : found
+          ? t('tsettings.solver.found', { url: found })
+          : missing
+            ? t('tsettings.solver.missing')
+            : t('tsettings.solver.none'))
   return (
     <ListRow wide label={t('tsettings.solver.label')} hint={t('tsettings.solver.hint')} status={status || undefined}>
       <form
@@ -334,6 +348,14 @@ export function FlareSolverrRow({ saved, server }: { saved: string; server: stri
           {t('tsettings.solver.save')}
         </Button>
       </form>
+      {missing && !done && (
+        <div className={styles.solverHelper}>
+          <p className={styles.solverHelperText}>{t('tsettings.solver.add')}</p>
+          <pre className={styles.solverCompose} data-testid="solver-compose">
+            {missing}
+          </pre>
+        </div>
+      )}
     </ListRow>
   )
 }

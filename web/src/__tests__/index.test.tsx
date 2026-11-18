@@ -25,12 +25,13 @@ describe('registerAddon("torrents")', () => {
       ['migrate', true],
     ])
     expect(c?.manageTiles?.map((t) => [t.to, t.icon, t.admin])).toEqual([
-      ['downloads', 'download', true],
-      ['sources', 'plug', true],
-      ['settings', 'gear', true],
+      ['downloads', 'arrowDownCircle', true],
+      ['sources', 'antenna', true],
+      ['settings', 'sliders', true],
       ['manage/follows', 'eye', true],
     ])
     // labels and titles are strings keys the core resolves when it draws them
+    expect(c?.manageTiles?.every((t) => t.group === 'downloads' && t.tint)).toBe(true)
     expect(c?.manageTiles?.map((t) => t.label)).toEqual(['common.downloads', 'manage.section.sources', 'tsettings.title', 'follows.manage'])
     expect(c?.routes?.map((r) => c?.strings?.ru?.[r.title])).toEqual(['Загрузки', 'Источники', 'Добавить источник', 'Добавить источник', 'Источники', 'Настройки загрузок', 'Мои слежения', 'Слежение', 'Переезд: Sonarr, Radarr, qBittorrent'])
     expect(c?.manageTiles?.map((t) => c?.strings?.en?.[t.label])).toEqual(['Downloads', 'Sources', 'Download settings', 'Following'])

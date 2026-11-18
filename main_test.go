@@ -479,3 +479,22 @@ func TestFollowAPI_503UntilReady(t *testing.T) {
 		t.Fatalf("GET /api/admin/follow: %d", code)
 	}
 }
+
+// TestManifestDeclaresFlareSolverr: the manifest the program embeds
+// declares the FlareSolverr helper service, and the watch is built on it.
+func TestManifestDeclaresFlareSolverr(t *testing.T) {
+	w, err := solverHelper(manifestJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w == nil || w.Helper.Address() != "http://flaresolverr:8191" || w.Helper.Health != "/" {
+		t.Fatalf("helper %+v", w)
+	}
+	disk, err := os.ReadFile("antresol-addon.json")
+	if err != nil || string(disk) != string(manifestJSON) {
+		t.Fatal("the embedded manifest is not antresol-addon.json")
+	}
+	if w, err := solverHelper([]byte(`{"id":"torrents"}`)); err != nil || w != nil {
+		t.Fatalf("none declared: %+v %v", w, err)
+	}
+}

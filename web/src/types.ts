@@ -191,6 +191,18 @@ export interface AdminSettings {
   flareSolverrUrl?: string
   /** The server's ANTRESOL_TORRENTS_FLARESOLVERR_URL, used while none is saved here. */
   flareSolverrServer?: string
+  /** The FlareSolverr helper service on its compose name (addonkit.HelperStatus), used while neither address is set. */
+  flareSolverrHelper?: HelperStatus
+}
+
+/** A helper service the manifest declares: the admin's address, found on its compose name, or neither. */
+export interface HelperStatus {
+  name?: string
+  source: 'override' | 'compose' | 'none'
+  /** the compose address (never the admin's own) */
+  address?: string
+  /** the block to add to compose.yml, while it is not found */
+  compose?: string
 }
 
 /** GET x/admin/engine. */

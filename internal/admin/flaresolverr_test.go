@@ -2,10 +2,14 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/antresol-app/antresol/addonkit"
 )
 
 // fakeSolver answers GET / as FlareSolverr does (or as something else).
@@ -86,6 +90,59 @@ func TestFlareSolverrClearedFallsBackToTheServers(t *testing.T) {
 	w = e.do("GET", "/api/admin/settings", "", &admin)
 	if !strings.Contains(w.Body.String(), `"flareSolverrServer":"http://server-solver:8191"`) {
 		t.Fatalf("GET settings: %s", w.Body)
+	}
+}
+
+// TestFlareSolverrHelper: with nothing saved and no server address the
+// settings show the helper service (found: its compose address; not: the
+// block to add), and clearing the field falls back to the found helper.
+func TestFlareSolverrHelper(t *testing.T) {
+	up := false
+	hw := &addonkit.HelperWatch{Helper: addonkit.Helper{Name: "flaresolverr", Image: "img:1", Port: 8191, Health: "/"},
+		Probe: func(context.Context) error {
+			if up {
+				return nil
+			}
+			return errors.New("down")
+		}}
+	e := newEnv(t, false, false)
+	e.h = Routes(Deps{Acquire: e.acq, Sources: e.src, Settings: e.st, NoSeed: e.ns, Upload: e.eng,
+		StreamCacheDefaultGB: 50, FlareSolverrHelper: hw})
+	helperOf := func() addonkit.HelperStatus {
+		var v struct {
+			FlareSolverrHelper *addonkit.HelperStatus `json:"flareSolverrHelper"`
+		}
+		w := e.do("GET", "/api/admin/settings", "", &admin)
+		if err := json.Unmarshal(w.Body.Bytes(), &v); err != nil || v.FlareSolverrHelper == nil {
+			t.Fatalf("GET settings: %d %s", w.Code, w.Body)
+		}
+		return *v.FlareSolverrHelper
+	}
+	if st := helperOf(); st.Source != addonkit.HelperNone || !strings.Contains(st.Compose, "image: img:1") {
+		t.Fatalf("not found: %+v", st)
+	}
+	hw.Check(context.Background())
+	if st := helperOf(); st.Source != addonkit.HelperNone {
+		t.Fatalf("still not found: %+v", st)
+	}
+	up = true
+	hw.Check(context.Background())
+	if st := helperOf(); st.Source != addonkit.HelperCompose || st.Address != "http://flaresolverr:8191" || st.Compose != "" {
+		t.Fatalf("found: %+v", st)
+	}
+	// clearing the field: the helper again
+	if w := e.do("PUT", "/api/admin/settings/flaresolverr", `{"url":""}`, &admin); w.Code != http.StatusOK {
+		t.Fatalf("clear: %d %s", w.Code, w.Body)
+	}
+	if e.src.FlareSolverr() != "http://flaresolverr:8191" {
+		t.Fatalf("manager uses %q", e.src.FlareSolverr())
+	}
+	// a saved address: the helper is the admin's
+	if err := e.st.SetFlareSolverrURL(context.Background(), "http://192.168.50.20:8191"); err != nil {
+		t.Fatal(err)
+	}
+	if st := helperOf(); st.Source != addonkit.HelperOverride || st.Address != "" {
+		t.Fatalf("saved: %+v", st)
 	}
 }
 

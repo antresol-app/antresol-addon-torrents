@@ -8,12 +8,20 @@
     "ru": "Поиск и загрузка раздач, источники, торрент-движок",
     "en": "Searching and downloading releases, sources, the torrent engine"
   },
-  "version": "0.4.7",
+  "version": "0.4.8",
   "author": "Antresol",
   "homepage": "",
   "contract": 1,
   "platforms": {},
   "access": "adults",
+  "helpers": [
+    {
+      "name": "flaresolverr",
+      "image": "ghcr.io/flaresolverr/flaresolverr:v3.5.2",
+      "port": 8191,
+      "health": "/"
+    }
+  ],
   "permissions": [
     "library.read",
     "library.write",

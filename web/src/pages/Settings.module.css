@@ -16,6 +16,24 @@
   gap: var(--s-2);
   width: 100%;
 }
+.solverHelper {
+  width: 100%;
+  margin-top: var(--s-2);
+}
+.solverHelperText {
+  font: var(--t-subhead);
+  color: var(--label-2);
+}
+.solverCompose {
+  margin-top: var(--s-2);
+  padding: var(--s-3);
+  border-radius: var(--r-control);
+  background: var(--fill-1);
+  font: var(--t-mono);
+  white-space: pre;
+  overflow-x: auto;
+  user-select: all;
+}
 .solverField {
   flex: 1 1 240px;
   min-width: 0;
