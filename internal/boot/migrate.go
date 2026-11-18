@@ -41,7 +41,7 @@ func (s *Services) buildMigrate(ctx context.Context, tm *tmdb.Client, client *ad
 	paths, left := migrate.DefaultPaths(c.ImportDir, c.ProwlarrDB)
 	m := migrate.Service{
 		DB: s.DB, Engine: s.Engine, Indexer: s.Sources, Follow: s.Follows, Library: lib,
-		Paths: paths, Leftover: left, FlareSolverrSet: c.FlareSolverr != "",
+		Paths: paths, Leftover: left, FlareSolverrSet: s.Sources.FlareSolverr() != "",
 		QB: migrate.QBOptions{
 			WebURL: c.QBURL, Username: c.QBUser, Password: c.QBPassword,
 			LinkDir:      filepath.Join(c.DownloadDir, ".qbt-import"),

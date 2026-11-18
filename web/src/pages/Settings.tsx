@@ -5,10 +5,11 @@
 // (incoming connections, «Не раздавать», the upload limit, the watch cache).
 // Saved as they change (a number field after a pause). «Не раздавать» has its
 // own endpoint and is locked, with «Задано на сервере», when the server
-// forces it (ANTRESOL_TORRENTS_NO_SEEDING=on).
+// forces it (ANTRESOL_TORRENTS_NO_SEEDING=on). «FlareSolverr» is saved on
+// its own endpoint, by its button, once the address answers.
 import { ApiError, Icon, ui } from '@antresol/addon-sdk'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getEngine, getSettings, saveNoSeeding, saveSettings } from '../api'
+import { getEngine, getSettings, saveFlareSolverr, saveNoSeeding, saveSettings } from '../api'
 import { useT } from '../i18n'
 import { LANGS, langLabel } from '../langs'
 import { RankedList } from '../RankedList'
@@ -17,7 +18,7 @@ import type { AdminSettings, EngineStatus, LangCode, MusicFormat, Mp3Bitrate, Vo
 import m from './Manage.module.css'
 import styles from './Settings.module.css'
 
-const { GroupedSection, ListRow, MultiSelect, NumberField, SegmentedControl, Select, Toggle } = ui
+const { Button, GroupedSection, ListRow, MultiSelect, NumberField, SegmentedControl, Select, TextField, Toggle } = ui
 
 export const SIZE_STOPS = [2, 4, 6, 8, 10, 15, 20, 30, 40, 60, 80, 0]
 
@@ -265,7 +266,75 @@ export function Settings() {
           />
         )}
       </GroupedSection>
+
+      <GroupedSection title={t('tsettings.solver.group')}>
+        <FlareSolverrRow saved={values.flareSolverrUrl ?? ''} server={values.flareSolverrServer ?? ''} />
+      </GroupedSection>
     </section>
+  )
+}
+
+/**
+ * «FlareSolverr»: the address of the service that gets past Cloudflare for
+ * the sources behind it. «Сохранить» saves it only once it answers as
+ * FlareSolverr; an empty field removes it (the server's address, if any,
+ * applies then). Its own endpoint, never the page's autosave.
+ */
+export function FlareSolverrRow({ saved, server }: { saved: string; server: string }) {
+  const t = useT()
+  const [value, setValue] = useState(saved)
+  const [current, setCurrent] = useState(saved)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [done, setDone] = useState('')
+  const save = async () => {
+    setBusy(true)
+    setError('')
+    setDone('')
+    try {
+      const out = await saveFlareSolverr(value)
+      setCurrent(out.url)
+      setValue(out.url)
+      setDone(out.url ? t('tsettings.solver.ok', { version: out.version ? ` · ${out.version}` : '' }) : t('tsettings.solver.cleared'))
+    } catch (e) {
+      setError(errorText(e, t('tsettings.solver.failed')))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const status = done || (current ? '' : server ? t('tsettings.solver.server', { url: server }) : t('tsettings.solver.none'))
+  return (
+    <ListRow wide label={t('tsettings.solver.label')} hint={t('tsettings.solver.hint')} status={status || undefined}>
+      <form
+        className={styles.solverForm}
+        onSubmit={(e) => {
+          e.preventDefault()
+          void save()
+        }}
+      >
+        <div className={styles.solverField}>
+          <TextField
+            label={t('tsettings.solver.field')}
+            hideLabel
+            value={value}
+            placeholder={server || 'http://flaresolverr:8191'}
+            onChange={(e) => {
+              setValue(e.target.value)
+              setError('')
+              setDone('')
+            }}
+            error={error || null}
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+            inputMode="url"
+          />
+        </div>
+        <Button type="submit" variant="secondary" loading={busy} disabled={busy || value.trim() === current}>
+          {t('tsettings.solver.save')}
+        </Button>
+      </form>
+    </ListRow>
   )
 }
 

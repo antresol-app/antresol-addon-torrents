@@ -7,3 +7,16 @@
   vertical-align: -2px;
   color: var(--warning);
 }
+/* «FlareSolverr»: the address field and «Сохранить» side by side, the
+   field taking the room; on a phone the button goes under it. */
+.solverForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--s-2);
+  width: 100%;
+}
+.solverField {
+  flex: 1 1 240px;
+  min-width: 0;
+}

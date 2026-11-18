@@ -44,11 +44,15 @@ type settingsView struct {
 	MP3Bitrate     string   `json:"mp3Bitrate"`
 	// OutsideFileRoots: holds outside the file browser's roots.
 	OutsideFileRoots *int `json:"outsideFileRoots,omitempty"`
+	// FlareSolverrURL: the address saved here ("" = none; its own PUT
+	// writes it); FlareSolverrServer: the server's, used while none is saved.
+	FlareSolverrURL    string `json:"flareSolverrUrl"`
+	FlareSolverrServer string `json:"flareSolverrServer"`
 }
 
 // settingsIn is a PUT's body: a field left out keeps its value; noSeeding*,
-// languages and outsideFileRoots are not the client's to set and are
-// ignored.
+// languages, outsideFileRoots and the FlareSolverr fields (their own PUT)
+// are not set here and are ignored.
 type settingsIn struct {
 	UploadLimited  *bool     `json:"uploadLimited"`
 	UploadLimitKBs *int64    `json:"uploadLimitKBs"`
@@ -126,6 +130,10 @@ func (s *settings) load(r *http.Request) (settingsView, releaseprefs.Prefs, erro
 	v.BookLangs = lang.Ordered(p.MediaLangs("book"), v.Languages)
 	v.AudiobookLangs = lang.Ordered(p.MediaLangs("audiobook"), v.Languages)
 	v.ComicLangs = lang.Ordered(p.MediaLangs("comic"), v.Languages)
+	if v.FlareSolverrURL, err = s.Settings.FlareSolverrURL(ctx); err != nil {
+		return v, p, err
+	}
+	v.FlareSolverrServer = s.FlareSolverrServer
 	if s.Outside != nil {
 		n := s.Outside()
 		v.OutsideFileRoots = &n

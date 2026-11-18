@@ -618,7 +618,7 @@ func TestProwlarrFlareSolverrWarning(t *testing.T) {
 		}
 		want := []string(nil)
 		if !set {
-			want = []string{"Kinozal: нужен FlareSolverr — задайте ANTRESOL_TORRENTS_FLARESOLVERR_URL"}
+			want = []string{"Kinozal: нужен FlareSolverr — укажите его адрес в «Управление → Настройки загрузок»"}
 		}
 		if !reflect.DeepEqual(warns, want) {
 			t.Fatalf("FlareSolverrSet=%v: warnings %q", set, warns)

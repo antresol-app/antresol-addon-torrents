@@ -25,6 +25,8 @@ var (
 	ErrLoginFailed = errors.New("не удалось войти на сайт")
 	ErrCaptcha     = errors.New("сайт просит ввести капчу")
 	ErrCloudflare  = errors.New("сайт закрыт защитой от ботов (Cloudflare)")
+	// ErrNoSolver comes with ErrCloudflare when no FlareSolverr address is set
+	ErrNoSolver    = errors.New("FlareSolverr не задан")
 	ErrUnavailable = errors.New("сайт недоступен")
 	ErrNotTorrent  = errors.New("сайт вернул не торрент-файл")
 	ErrBadResponse = errors.New("сайт ответил не так, как ожидалось")

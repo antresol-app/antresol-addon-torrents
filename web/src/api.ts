@@ -86,14 +86,16 @@ export const importProwlarr = (path: string) =>
 
 export const getSettings = (signal?: AbortSignal) => api.get<AdminSettings>('admin/settings', signal)
 /** What a settings PUT carries: not «Не раздавать» (saveNoSeeding writes it) and not what only the server reports. */
-export type SettingsBody = Omit<AdminSettings, 'noSeeding' | 'noSeedingForced' | 'languages' | 'outsideFileRoots'>
+export type SettingsBody = Omit<AdminSettings, 'noSeeding' | 'noSeedingForced' | 'languages' | 'outsideFileRoots' | 'flareSolverrUrl' | 'flareSolverrServer'>
 /** Everything but «Не раздавать»; the answer is the whole object, whose no-seeding fields the page ignores. */
 export const saveSettings = (s: AdminSettings) => {
-  const { noSeeding: _n, noSeedingForced: _f, languages: _l, outsideFileRoots: _o, ...body } = s
+  const { noSeeding: _n, noSeedingForced: _f, languages: _l, outsideFileRoots: _o, flareSolverrUrl: _u, flareSolverrServer: _s, ...body } = s
   return api.put<AdminSettings>('admin/settings', body satisfies SettingsBody)
 }
 /** «Не раздавать»: applied by the server at once; refused (409) while forced by the server. */
 export const saveNoSeeding = (on: boolean) => api.put<void>('admin/settings/no-seeding', { on })
+/** FlareSolverr's address: saved only once it answers as FlareSolverr (422 with the reason otherwise); "" clears it. */
+export const saveFlareSolverr = (url: string) => api.put<{ url: string; version?: string }>('admin/settings/flaresolverr', { url })
 
 // --- «Найти и добавить» and «Смотреть сейчас» (adults) ---
 

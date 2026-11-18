@@ -15,6 +15,7 @@ const (
 	keyUploadLimited = "upload_limited"
 	keyUploadKBs     = "upload_limit_kbs"
 	keyStreamCacheGB = "stream_cache_gb"
+	keyFlareSolverr  = "flaresolverr_url"
 )
 
 // Settings reads and writes the addon's settings rows. Values are stored
@@ -124,4 +125,17 @@ func (s Settings) SetStreamCacheGB(ctx context.Context, gb float64) error {
 		return fmt.Errorf("store: stream cache %v GB is not a size", gb)
 	}
 	return s.set(ctx, keyStreamCacheGB, strconv.FormatFloat(gb, 'f', -1, 64))
+}
+
+// FlareSolverrURL is the FlareSolverr address saved in «Настройки загрузок»
+// ("" without a row: the server's ANTRESOL_TORRENTS_FLARESOLVERR_URL, if
+// any, applies).
+func (s Settings) FlareSolverrURL(ctx context.Context) (string, error) {
+	v, _, err := s.get(ctx, keyFlareSolverr)
+	return v, err
+}
+
+// SetFlareSolverrURL saves it ("" clears it).
+func (s Settings) SetFlareSolverrURL(ctx context.Context, url string) error {
+	return s.set(ctx, keyFlareSolverr, url)
 }

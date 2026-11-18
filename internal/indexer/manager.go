@@ -407,6 +407,37 @@ func (m *Manager) linkFallbacks(ctx context.Context) error {
 	return nil
 }
 
+// FlareSolverr is the FlareSolverr address the searches use ("" = none).
+func (m *Manager) FlareSolverr() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.flareSolverr
+}
+
+// SetFlareSolverr changes the FlareSolverr address ("" = none): the next
+// request of each source goes through it (its runner is built anew).
+func (m *Manager) SetFlareSolverr(url string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.flareSolverr = url
+}
+
+// RecheckFailed tests, one after another, the enabled sources whose last
+// check failed (after the FlareSolverr address changed); their new status
+// reaches the page through OnStatus. It returns when all are done.
+func (m *Manager) RecheckFailed(ctx context.Context) {
+	list, err := m.Sources(ctx)
+	if err != nil {
+		m.log.Info("indexer: recheck: sources", "err", err)
+		return
+	}
+	for _, s := range list {
+		if s.Enabled && s.Status == StatusError && ctx.Err() == nil {
+			_ = m.Test(ctx, s.ID)
+		}
+	}
+}
+
 // Test logs in and runs an empty search; the outcome is stored as the
 // source status. The returned error carries a human message.
 func (m *Manager) Test(ctx context.Context, id int64) error {
@@ -499,7 +530,8 @@ func (m *Manager) runner(s Source) (*cardigann.Runner, error) {
 	key := runnerKey(s.DefinitionID, s.Settings)
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if c, ok := m.runners[s.ID]; ok && c.key == key && c.def == def {
+	// a changed FlareSolverr address builds the runner anew (SetFlareSolverr)
+	if c, ok := m.runners[s.ID]; ok && c.key == key && c.def == def && c.runner.FlareSolverr == m.flareSolverr {
 		return c.runner, nil
 	}
 	r := &cardigann.Runner{

@@ -66,6 +66,12 @@ type Deps struct {
 	StreamCacheDefaultGB float64
 	// ProwlarrDB: the default path of «Импорт из Prowlarr».
 	ProwlarrDB string
+	// FlareSolverrServer: the server's ANTRESOL_TORRENTS_FLARESOLVERR_URL
+	// ("" = none), used while no address is saved in the settings.
+	FlareSolverrServer string
+	// SolverHTTP (optional) checks a FlareSolverr address (default
+	// http.DefaultClient; a field for tests).
+	SolverHTTP *http.Client
 	// Outside (optional): the holds left out of the core's push, outside
 	// the file browser's roots; GET settings carries the count.
 	Outside func() int
@@ -109,6 +115,7 @@ func Routes(d Deps) http.Handler {
 	mux.HandleFunc("GET /api/admin/settings", st.get)
 	mux.HandleFunc("PUT /api/admin/settings", st.put)
 	mux.HandleFunc("PUT /api/admin/settings/no-seeding", st.putNoSeeding)
+	mux.HandleFunc("PUT /api/admin/settings/flaresolverr", st.putFlareSolverr)
 	if d.AcquireFiles != nil {
 		mux.Handle("POST /api/admin/acquire/files", d.AcquireFiles)
 	}

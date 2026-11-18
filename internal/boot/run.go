@@ -132,6 +132,12 @@ func Build(ctx context.Context, b Booted, c Conf, client *addonkit.Client, info 
 			bus.Publish(events.Event{Type: indexer.EventSourceStatus, Data: map[string]any{"id": id, "status": status, "lastError": message}})
 		},
 	})
+	// the FlareSolverr address saved in «Настройки загрузок» wins over the server's
+	if u, err := settings.FlareSolverrURL(ctx); err != nil {
+		return nil, fmt.Errorf("boot: build: %w", err)
+	} else if u != "" {
+		sources.SetFlareSolverr(u)
+	}
 	gb, err := settings.StreamCacheGB(ctx, float64(c.StreamCacheBytes)/(1<<30))
 	if err != nil {
 		return nil, fmt.Errorf("boot: build: %w", err)

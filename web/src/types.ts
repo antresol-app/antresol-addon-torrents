@@ -187,6 +187,10 @@ export interface AdminSettings {
   languages?: LangCode[]
   /** Downloads whose folder is outside every folder of «Файлы». */
   outsideFileRoots?: number
+  /** The FlareSolverr address saved here ("" = none; saveFlareSolverr writes it). */
+  flareSolverrUrl?: string
+  /** The server's ANTRESOL_TORRENTS_FLARESOLVERR_URL, used while none is saved here. */
+  flareSolverrServer?: string
 }
 
 /** GET x/admin/engine. */

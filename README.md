@@ -5,6 +5,25 @@ The torrent family of Antresol as an addon (contract 1,
 releases, the torrent engine and its holds on library files. It is a
 separate addon with its own repository and releases, not part of the core.
 
+## Sites behind Cloudflare (FlareSolverr)
+
+Some trackers (RuTracker, for one) sit behind Cloudflare's bot check. The
+addon gets past it through [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr).
+Run it beside Antresol, e.g. in the same `compose.yml`:
+
+```yaml
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    restart: unless-stopped
+```
+
+then enter its address (`http://flaresolverr:8191`) in «Управление →
+Настройки загрузок → FlareSolverr» and press «Сохранить»: it is saved once it
+answers, and the sources that failed are checked again. The server's
+`ANTRESOL_TORRENTS_FLARESOLVERR_URL` still works and applies while no address
+is saved there.
+
 ## Layout
 
 | Path | What |

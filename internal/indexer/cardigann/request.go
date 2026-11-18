@@ -156,7 +156,7 @@ func (r *Runner) do(ctx context.Context, req *request) (*response, error) {
 	}
 	if isChallenge(resp) {
 		if r.FlareSolverr == "" {
-			return nil, fmt.Errorf("%w (%s)", ErrCloudflare, r.Def.Name)
+			return nil, fmt.Errorf("%w: %w (%s)", ErrCloudflare, ErrNoSolver, r.Def.Name)
 		}
 		return r.solve(ctx, req)
 	}

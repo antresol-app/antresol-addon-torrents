@@ -52,8 +52,10 @@ func humanErr(err error) error {
 			return i18n.Errorf("Не удалось войти на сайт: %s.", errors.New(cardigann.RedactText(rest)))
 		}
 		return i18n.Errorf("Не удалось войти на сайт. Проверьте логин и пароль.")
+	case errors.Is(err, cardigann.ErrNoSolver):
+		return i18n.Errorf("Сайт закрыт защитой от ботов (Cloudflare). Нужен FlareSolverr — укажите его адрес в «Управление → Настройки загрузок».")
 	case errors.Is(err, cardigann.ErrCloudflare):
-		return i18n.Errorf("Сайт закрыт защитой от ботов (Cloudflare). Нужен FlareSolverr — укажите его адрес в настройках.")
+		return i18n.Errorf("Сайт закрыт защитой от ботов (Cloudflare), и FlareSolverr её не прошёл. Проверьте его в «Управление → Настройки загрузок».")
 	case errors.Is(err, cardigann.ErrUnavailable):
 		return i18n.Errorf("Сайт недоступен. Проверьте, открывается ли он в браузере, или укажите зеркало.")
 	case errors.Is(err, cardigann.ErrNotFile):

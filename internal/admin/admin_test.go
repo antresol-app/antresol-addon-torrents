@@ -273,6 +273,7 @@ var everyRoute = [][2]string{
 	{"GET", "/api/admin/settings"},
 	{"PUT", "/api/admin/settings"},
 	{"PUT", "/api/admin/settings/no-seeding"},
+	{"PUT", "/api/admin/settings/flaresolverr"},
 }
 
 func TestAdmin_NonAdminRefused(t *testing.T) {
