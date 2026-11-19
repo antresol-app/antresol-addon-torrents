@@ -130,7 +130,7 @@ func ImportProwlarr(ctx context.Context, o ArrOptions, m ProwlarrImporter, rep *
 		}
 		if usable && im.NeedsFlareSolverr && !o.FlareSolverrSet {
 			rep.Add(Line{Source: SourceProwlarr, Kind: "source", Name: im.Name, Status: StatusWarning,
-				Reason: fmt.Sprintf("%s: нужен FlareSolverr — укажите его адрес в «Управление → Настройки загрузок»", im.Name)})
+				Reason: fmt.Sprintf("%s: нужен FlareSolverr — укажите его адрес в разделе «Настройки → Сервер → Настройки загрузок»", im.Name)})
 		}
 	}
 	if err != nil {

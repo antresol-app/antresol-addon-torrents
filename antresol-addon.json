@@ -8,7 +8,7 @@
     "ru": "Поиск и загрузка раздач, источники, торрент-движок",
     "en": "Searching and downloading releases, sources, the torrent engine"
   },
-  "version": "0.4.8",
+  "version": "0.4.9",
   "author": "Antresol",
   "homepage": "",
   "contract": 1,
@@ -53,7 +53,8 @@
     "tracking.titles",
     "notify.interest",
     "voiceover.origLang",
-    "migrate.leftovers"
+    "migrate.leftovers",
+    "channels.fetch"
   ],
   "notify": [
     {

@@ -25,6 +25,7 @@ import (
 
 	"github.com/antresol-app/antresol-addon-torrents/internal/admin"
 	"github.com/antresol-app/antresol-addon-torrents/internal/boot"
+	"github.com/antresol-app/antresol-addon-torrents/internal/channelfetch"
 	"github.com/antresol-app/antresol-addon-torrents/internal/coreadapt"
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/i18n"
 	"github.com/antresol-app/antresol-addon-torrents/internal/find"
@@ -182,6 +183,14 @@ func main() {
 		// the background on ctx), the followed titles, their followers,
 		// a library file's original language
 		trackinghooks.Register(hooks, svc.TrackingHooks())
+		// «ТВ» channels with fetching: their programmes downloaded before
+		// they air (channels.fetch), as any download (no upload where
+		// «Не раздавать» is on)
+		fetchDeps := channelfetch.Deps{Acquire: svc.Acq, Torrents: svc.Engine.List, DB: svc.DB}
+		if svc.Follows != nil {
+			fetchDeps.Follows = svc.Follows
+		}
+		channelfetch.Register(ctx, hooks, fetchDeps)
 		(&holds.Hooks{
 			Engine:  svc.Engine,
 			Remove:  func(ctx context.Context, ih string) error { return svc.Acq.Remove(ctx, ih, false) },

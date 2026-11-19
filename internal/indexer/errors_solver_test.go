@@ -13,7 +13,7 @@ import (
 func TestCloudflareMessagesNameTheSettingsPage(t *testing.T) {
 	none := humanError(fmt.Errorf("%w: %w (RuTracker)", cardigann.ErrCloudflare, cardigann.ErrNoSolver))
 	failed := humanError(fmt.Errorf("%w: FlareSolverr: timeout", cardigann.ErrCloudflare))
-	if !strings.Contains(none, "Нужен FlareSolverr — укажите его адрес в «Управление → Настройки загрузок»") {
+	if !strings.Contains(none, "Нужен FlareSolverr — укажите его адрес в разделе «Настройки → Сервер → Настройки загрузок»") {
 		t.Errorf("no solver: %q", none)
 	}
 	if !strings.Contains(failed, "FlareSolverr её не прошёл") || strings.Contains(failed, "укажите его адрес") {

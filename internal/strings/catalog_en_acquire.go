@@ -17,8 +17,8 @@ func init() {
 		"Эта раздача уже в «Загрузках»":                                  "This torrent is already in “Downloads”",
 		// acquire: TMDB lookups (the core's requests catalog has the same
 		// keys; the addon registers its own)
-		"Неизвестный фильм или сериал":             "Unknown movie or TV show",
-		"Такого фильма или сериала нет в TMDB":     "This movie or TV show isn’t on TMDB",
+		"Неизвестный фильм или сериал":             "Unknown movie or show",
+		"Такого фильма или сериала нет в TMDB":     "This movie or show isn’t on TMDB",
 		"TMDB сейчас недоступен. Попробуйте позже": "TMDB is unavailable right now. Try again later",
 		// acquire: refusals
 		"Подходящих вариантов не нашлось":                                                  "Couldn’t find a matching option",
@@ -38,7 +38,7 @@ func init() {
 		"Раздача ещё не скачана":                                                           "The torrent hasn’t finished downloading",
 		"Эта раздача добавлена не через поиск — Antresol не знает, что в ней":              "This torrent wasn’t added through search — Antresol doesn’t know what’s in it",
 		"Уже есть в медиатеке":                                                             "Already in the library",
-		"Поиск фильмов и сериалов недоступен: не задан ключ TMDB":                          "Movie and TV show search is unavailable: no TMDB key is set",
+		"Поиск фильмов и сериалов недоступен: не задан ключ TMDB":                          "Movie and show search is unavailable: no TMDB key is set",
 		"Источники раздач не настроены":                                                    "No torrent sources are set up",
 		"Выберите: смотреть сейчас или скачать на сервер":                                  "Choose: watch now or download to the server",
 		"Выберите сезон, который нужно скачать":                                            "Choose the season to download",

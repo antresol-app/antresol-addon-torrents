@@ -20,7 +20,7 @@ a helper service its manifest declares (`helpers`). Add it to the same
 
 and run `docker compose up -d`. The addon finds it by its service name
 (`http://flaresolverr:8191`) within half a minute, with nothing to enter;
-«Управление → Настройки загрузок → FlareSolverr» then says «Найден рядом с
+«Настройки → Сервер → Настройки загрузок → FlareSolverr» then says «Найден рядом с
 сервером», and the sources that failed are checked again. While it is not
 found, that row shows the same block.
 

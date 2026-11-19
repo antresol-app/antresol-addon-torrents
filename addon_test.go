@@ -56,13 +56,15 @@ func TestManifest(t *testing.T) {
 	// «Переезд»'s leftovers for the core's screen, and 0.4.0; the
 	// music import stays fenced: no imports permission, no import.* hook
 	hooks = append(hooks, "migrate.leftovers")
+	// TV channels that download their programmes ahead of air
+	hooks = append(hooks, "channels.fetch")
 	var topics []struct {
 		Topic    string            `json:"topic"`
 		Title    map[string]string `json:"title"`
 		Audience string            `json:"audience"`
 	}
 	json.Unmarshal(m.Notify, &topics)
-	if m.ID != "torrents" || m.Version != "0.4.8" || m.Contract != 1 || m.Access != "adults" ||
+	if m.ID != "torrents" || m.Version != "0.4.9" || m.Contract != 1 || m.Access != "adults" ||
 		!slices.Equal(m.Permissions, perms) || !slices.Equal(m.Hooks, hooks) ||
 		len(topics) != 1 || topics[0].Topic != "downloads" || topics[0].Audience != "admins" ||
 		topics[0].Title["ru"] != "Загрузки" || topics[0].Title["en"] != "Downloads" ||

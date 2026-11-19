@@ -15,7 +15,7 @@ func init() {
 		"Раздача «%s» продолжится: в ней есть и другое из медиатеки": "Seeding of “%s” will go on: it also holds other things in the library",
 		"Загрузки":      "Downloads",
 		"Кеш просмотра": "Streaming Cache",
-		"Следить можно только за фильмом или сериалом":                                                                     "Only a movie or a TV show can be followed",
+		"Следить можно только за фильмом или сериалом":                                                                     "Only a movie or a show can be followed",
 		"Слежение выключено":                                                                                               "Following is off",
 		"Нет связи с TMDB. Попробуйте позже":                                                                               "Can’t reach TMDB. Try again later",
 		"Это слежение добавил другой профиль":                                                                              "Another profile added this follow",
