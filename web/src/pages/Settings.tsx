@@ -267,12 +267,25 @@ export function Settings() {
         )}
       </GroupedSection>
 
-      <GroupedSection title={t('tsettings.solver.group')}>
+      <GroupedSection
+        title={t('tsettings.solver.group')}
+        footer={
+          <>
+            {t('tsettings.solver.about')}{' '}
+            <a href={FLARESOLVERR_DOCS} target="_blank" rel="noreferrer">
+              {t('tsettings.solver.docs')}
+            </a>
+          </>
+        }
+      >
         <FlareSolverrRow saved={values.flareSolverrUrl ?? ''} server={values.flareSolverrServer ?? ''} helper={values.flareSolverrHelper} />
       </GroupedSection>
     </section>
   )
 }
+
+/** The documentation's page on FlareSolverr: what it is, how to run it and how the addon finds it. */
+export const FLARESOLVERR_DOCS = 'https://github.com/antresol-app/antresol-addon-torrents/blob/main/README.ru.md#flaresolverr--для-сайтов-за-cloudflare'
 
 /**
  * «FlareSolverr»: the address of the service that gets past Cloudflare for

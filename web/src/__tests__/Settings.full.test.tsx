@@ -206,6 +206,13 @@ describe('the other settings', () => {
     expect(await screen.findByText(/3 загрузки вне папок «Файлов»/)).toBeInTheDocument()
   })
 
+  it('says what FlareSolverr is and links its documentation', async () => {
+    stub({ ...base })
+    render(<Settings />)
+    expect(await screen.findByText(/FlareSolverr — отдельная бесплатная программа/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Как установить и подключить FlareSolverr' })).toHaveAttribute('href', 'https://github.com/antresol-app/antresol-addon-torrents/blob/main/README.ru.md#flaresolverr--для-сайтов-за-cloudflare')
+  })
+
   it('names the load failure', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => json({ error: 'нет доступа' }, 403)))
     render(<Settings />)

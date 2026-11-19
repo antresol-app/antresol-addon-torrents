@@ -1,18 +1,51 @@
 # Antresol torrents addon
 
-The torrent family of Antresol as an addon (contract 1,
-`docs/addons/contract.md` in the core): searching sources, acquiring
-releases, the torrent engine and its holds on library files. It is a
-separate addon with its own repository and releases, not part of the core.
+[Русский](README.ru.md)
 
-## Sites behind Cloudflare (FlareSolverr)
+Find and download new films, series, music and books into the
+[Antresol](https://antresol-app.github.io/antresol/) library: search on the
+torrent sites you connect, pick a release, and the file lands in the right
+folder. Adults only; downloads are run by the administrator.
+
+## Install
+
+1. In Antresol: **Settings → Server → Extensions → Add Extension**, paste
+   `https://github.com/antresol-app/antresol-addon-torrents`, **Check**,
+   **Install**.
+2. Connect at least one source (below).
+3. If a source sits behind Cloudflare (RuTracker does), add FlareSolverr
+   (below).
+
+Its pages are in **Settings → Server**, group **Downloads & Sources**:
+**Downloads**, **Sources**, **Download settings** and **Following**.
+
+## Sources
+
+**Settings → Server → Sources → Add Source.**
+
+1. Pick a site: RuTracker, Rutor, Kinozal, NNM-Club and others, or a book
+   OPDS catalogue. Russian sites come first.
+2. Fill in what the site asks for (login and password, or a cookie), or
+   nothing for an open site.
+3. Click **Connect**. The source is checked and starts being searched.
+
+Moving from Prowlarr: **Sources → Import from Prowlarr** brings over its sites
+and sign-ins (Prowlarr's settings folder mounted into Antresol as `/prowlarr`).
+Sonarr, Radarr and qBittorrent: **Settings → Server → Migration**.
+
+## FlareSolverr (sites behind Cloudflare)
 
 Some trackers (RuTracker, for one) sit behind Cloudflare's bot check. The
 addon gets past it through [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr),
 a helper service its manifest declares (`helpers`). Add it to the same
-`compose.yml` as Antresol, under `services:`, with no `ports:`:
+`compose.yml` as Antresol, under `services:`, next to `antresol`, with no
+`ports:`:
 
 ```yaml
+services:
+  antresol:
+    # ... as before
+
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
     restart: unless-stopped
@@ -20,15 +53,23 @@ a helper service its manifest declares (`helpers`). Add it to the same
 
 and run `docker compose up -d`. The addon finds it by its service name
 (`http://flaresolverr:8191`) within half a minute, with nothing to enter;
-«Настройки → Сервер → Настройки загрузок → FlareSolverr» then says «Найден рядом с
-сервером», and the sources that failed are checked again. While it is not
-found, that row shows the same block.
+**Settings → Server → Download settings → FlareSolverr** then says it was
+found next to the server, and the sources that failed are checked again. While
+it is not found, that row shows the same block.
 
 An address wins over the one found, in this order: the one saved in that
 field (saved once it answers), then the server's
 `ANTRESOL_TORRENTS_FLARESOLVERR_URL`. Use one when FlareSolverr already runs
 elsewhere on the network, or when the server is not in Docker; clearing the
 field falls back to the next one.
+
+## Everyday use
+
+- **Search → Find and Add**: find a title that is not in the library yet and
+  pick a release.
+- A title's page: download a season or the film, or follow a series so new
+  episodes come by themselves.
+- **Download settings**: the quality to look for, and FlareSolverr.
 
 ## Layout
 
