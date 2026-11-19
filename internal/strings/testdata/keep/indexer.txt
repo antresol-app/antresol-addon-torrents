@@ -21,3 +21,5 @@ internal/indexer/score_album.go: ^(?:the )?[\p{L}\d]+ (?:album|альбом)$  #
 internal/indexer/score_album.go:  альбом  # word stripped from folded album nicknames (matching)
 internal/indexer/score_media.go: (?i)аудиокниг|аудиоспектакл|audio\s?book|unabridged|narrated|\bчита(ет|ют)\b|\bчтец|kbps|кбит|(^|[^\pL\pN])(mp3|m4b|m4a|aac|flac|ogg|opus)($|[^\pL\pN])  # regex matched in release names
 internal/indexer/score_media.go: и  # stopword of artist names (matching)
+internal/indexer/cardigann/topic.go: %w: %s ответил %d  # technical detail: logs only (a release page that did not answer is skipped)
+internal/indexer/topic.go  # voice-over labels and kinds matched on release pages (parser data, never shown)

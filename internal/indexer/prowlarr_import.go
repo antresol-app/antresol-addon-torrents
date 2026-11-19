@@ -482,6 +482,9 @@ func (m *Manager) importRows(ctx context.Context, list []indexerRow, customDir, 
 		key := importKey(def.ID, settings)
 		if id, ok := have[key]; ok {
 			matched[id] = true
+			if err := m.markProwlarr(ctx, id, dry); err != nil {
+				return out, err
+			}
 			im.Reason = ReasonAlready
 			out = append(out, im)
 			continue
@@ -489,6 +492,9 @@ func (m *Manager) importRows(ctx context.Context, list []indexerRow, customDir, 
 		if len(r.hidden) > 0 {
 			if id, ok := sameBut(def.ID, settings, r.hidden); ok {
 				matched[id], have[key] = true, id
+				if err := m.markProwlarr(ctx, id, dry); err != nil {
+					return out, err
+				}
 				im.Reason = ReasonAlready
 				out = append(out, im)
 				continue
@@ -497,6 +503,9 @@ func (m *Manager) importRows(ctx context.Context, list []indexerRow, customDir, 
 		if prev, ok := byLoose[looseKey(def.ID, settings)]; ok && cookieLogin(def) && !matched[prev.ID] {
 			matched[prev.ID] = true
 			have[key] = prev.ID
+			if err := m.markProwlarr(ctx, prev.ID, dry); err != nil {
+				return out, err
+			}
 			if !fresh {
 				// Prowlarr's configured cookie: the source's own may be newer
 				im.Reason = ReasonAlready
@@ -510,6 +519,9 @@ func (m *Manager) importRows(ctx context.Context, list []indexerRow, customDir, 
 			}
 			s, err := m.replaceCookie(ctx, prev, settings["cookie"])
 			if err != nil {
+				return out, err
+			}
+			if s, err = m.Get(ctx, s.ID); err != nil {
 				return out, err
 			}
 			im.Source, im.Reason = &s, ReasonCookieUpdated
@@ -526,11 +538,28 @@ func (m *Manager) importRows(ctx context.Context, list []indexerRow, customDir, 
 		if err != nil {
 			return out, err
 		}
+		if err := m.markProwlarr(ctx, s.ID, dry); err != nil {
+			return out, err
+		}
+		if s, err = m.Get(ctx, s.ID); err != nil {
+			return out, err
+		}
 		have[key] = s.ID
 		im.Source = &s
 		out = append(out, im)
 	}
 	return out, nil
+}
+
+// markProwlarr records that Prowlarr's list has source id: its origin, and
+// this import's time (nothing in a dry run, or for a source only planned).
+func (m *Manager) markProwlarr(ctx context.Context, id int64, dry bool) error {
+	if dry || id == 0 {
+		return nil
+	}
+	_, err := m.db.ExecContext(ctx, `UPDATE sources SET origin=?, synced_at=? WHERE id=?`,
+		OriginProwlarr, m.now().UTC().Format(time.RFC3339), id)
+	return err
 }
 
 // looseKey is importKey without the cookie.

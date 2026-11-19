@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -125,7 +126,16 @@ func TestImportProwlarr(t *testing.T) {
 		}
 	}
 
-	// importing again does not duplicate
+	// a source from Prowlarr's list says so, with the import's time
+	first := time.Date(2026, 11, 19, 10, 0, 0, 0, time.UTC)
+	for _, im := range imported {
+		if im.Source != nil && (im.Source.Origin != OriginProwlarr || im.Source.SyncedAt.IsZero()) {
+			t.Errorf("%s: origin %q synced %v, want from Prowlarr", im.Name, im.Source.Origin, im.Source.SyncedAt)
+		}
+	}
+	e.m.now = func() time.Time { return first }
+
+	// importing again does not duplicate, and marks the sync
 	again, err := e.m.ImportProwlarr(ctx, path)
 	if err != nil {
 		t.Fatal(err)
@@ -138,6 +148,11 @@ func TestImportProwlarr(t *testing.T) {
 	srcs, _ := e.m.Sources(ctx)
 	if len(srcs) != 4 {
 		t.Fatalf("sources = %d, want 4", len(srcs))
+	}
+	for _, s := range srcs {
+		if s.Origin != OriginProwlarr || !s.SyncedAt.Equal(first) {
+			t.Errorf("%s after re-import: origin %q synced %v, want %v", s.Name, s.Origin, s.SyncedAt, first)
+		}
 	}
 }
 

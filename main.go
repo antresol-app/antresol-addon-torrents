@@ -214,9 +214,13 @@ func main() {
 			log.Printf("%s: manifest helpers: %v", env.ID, err)
 		}
 		if solver != nil {
+			solver.Health = &addonkit.HelperHealth{} // its probes, for helpers.status
 			sw := boot.NewSolverWatch(solver, svc.Sources, svc.Settings.FlareSolverrURL, conf.FlareSolverr)
 			svc.Loops = append(svc.Loops, sw.Run)
 		}
+		// «Состояние» of the core: FlareSolverr as the sources use it
+		solverStatus := &boot.SolverStatus{Watch: solver, Saved: svc.Settings.FlareSolverrURL, Server: conf.FlareSolverr}
+		solverStatus.Register(hooks)
 		svc.OnReady = func() {
 			// the admin routes (paths /api/admin/…, as the proxy delivers
 			// them) serve once the holds are with the core

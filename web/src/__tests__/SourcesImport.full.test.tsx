@@ -143,3 +143,32 @@ describe("a backup way in", () => {
     await waitFor(() => expect(tested).toContain("15"));
   });
 });
+
+describe("sources from Prowlarr", () => {
+  it("marks a source from Prowlarr's list and says how Prowlarr is reached, with the way to «Переезд»", async () => {
+    const synced = new Date(Date.now() - 2 * 3600_000).toISOString();
+    vi.stubGlobal("EventSource", FakeSource);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/x/admin/migrate/prowlarr")) return json({ link: "api" });
+        if (url.includes("/api/addons/torrents/x/admin/sources"))
+          return json([{ ...src(1, "Kinozal"), origin: "prowlarr", syncedAt: synced }, src(2, "Rutor")]);
+        if (url.includes("/api/catalog")) return json([]);
+        return json({ error: "нет" }, 404);
+      }),
+    );
+    render(
+      <MemoryRouter>
+        <Sources />
+      </MemoryRouter>,
+    );
+    const cards = await screen.findAllByTestId("source-card");
+    expect(within(cards[0]!).getByText(/^из Prowlarr · /)).toBeInTheDocument();
+    expect(within(cards[1]!).queryByText(/из Prowlarr/)).toBeNull();
+    const line = await screen.findByTestId("prowlarr-link");
+    expect(line).toHaveTextContent("Prowlarr подключён по API");
+    expect(within(line).getByRole("link", { name: "Переезд" })).toHaveAttribute("href", "/addons/torrents/migrate");
+  });
+});

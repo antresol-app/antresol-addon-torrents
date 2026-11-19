@@ -270,6 +270,9 @@ type Candidate struct {
 	// Explicit: the catalog marks it adult content (Open Library subjects,
 	// a MusicBrainz disambiguation): kept from kid profiles.
 	Explicit bool `json:"-"`
+	// Approx: TMDB found nothing for the query as typed; this title is
+	// within a few edits of it («Джентельмены» → «Джентльмены»).
+	Approx bool `json:"approx,omitempty"`
 }
 
 // ReleaseRequest asks for releases of a TMDB title, or of an album, book,
@@ -741,7 +744,9 @@ func (s *Service) meta() (Metadata, error) {
 const discoverLimit = 20
 
 // Discover searches TMDB for movies and series. One kind failing still
-// returns the other.
+// returns the other. TMDB's search forgives no typo: when it finds nothing,
+// discoverFuzzy looks again by the words' beginnings and keeps the titles
+// within a few edits of the query (Approx).
 func (s *Service) Discover(ctx context.Context, q string) ([]Candidate, error) {
 	m, err := s.meta()
 	if err != nil {
@@ -751,26 +756,25 @@ func (s *Service) Discover(ctx context.Context, q string) ([]Candidate, error) {
 	if q == "" {
 		return []Candidate{}, nil
 	}
-	var movies, shows []tmdb.Result
-	var merr, terr error
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() { defer wg.Done(); movies, merr = m.SearchMovie(ctx, q, 0) }()
-	go func() { defer wg.Done(); shows, terr = m.SearchTV(ctx, q, 0) }()
-	wg.Wait()
-	if merr != nil && terr != nil {
+	movies, shows, err := searchBoth(ctx, m, q)
+	if err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		s.log.Warn("tmdb search", "err", merr)
-		return nil, wrapErr(ErrUnavailable, "TMDB сейчас недоступен. Попробуйте позже", merr)
+		s.log.Warn("tmdb search", "err", err)
+		return nil, wrapErr(ErrUnavailable, "TMDB сейчас недоступен. Попробуйте позже", err)
+	}
+	approx := false
+	if len(movies) == 0 && len(shows) == 0 {
+		movies, shows = discoverFuzzy(ctx, m, q)
+		approx = true
 	}
 	out := []Candidate{}
 	add := func(kind string, r tmdb.Result) {
 		if r.Adult {
 			return // adult content: never offered
 		}
-		c := Candidate{TMDBID: r.ID, Kind: kind, Title: r.Title, Year: r.Year, Overview: r.Overview}
+		c := Candidate{TMDBID: r.ID, Kind: kind, Title: r.Title, Year: r.Year, Overview: r.Overview, Approx: approx}
 		if r.Poster != "" {
 			c.Poster = m.ImageURL("w342", r.Poster)
 		}
@@ -792,6 +796,21 @@ func (s *Service) Discover(ctx context.Context, q string) ([]Candidate, error) {
 		}
 	}
 	return out, nil
+}
+
+// searchBoth is TMDB's movie and TV search of q at once; err only when
+// both failed.
+func searchBoth(ctx context.Context, m Metadata, q string) (movies, shows []tmdb.Result, err error) {
+	var merr, terr error
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); movies, merr = m.SearchMovie(ctx, q, 0) }()
+	go func() { defer wg.Done(); shows, terr = m.SearchTV(ctx, q, 0) }()
+	wg.Wait()
+	if merr != nil && terr != nil {
+		return nil, nil, merr
+	}
+	return movies, shows, nil
 }
 
 func isVideoKind(k string) bool { return k == KindMovie || k == KindSeries }

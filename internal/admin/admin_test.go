@@ -184,6 +184,8 @@ func newEnv(t *testing.T, forced, saved bool) *env {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
+	// a FlareSolverr change's recheck may still run: done before the dir goes
+	t.Cleanup(background.Wait)
 	e := &env{t: t, dir: dir, acq: newFakeAcquire(), eng: &fakeEngine{dir: dir}, st: store.Settings{DB: d}}
 	// the stored setting from before, saved the only way there is (NoSeed)
 	if err := boot.NewNoSeed(false, dir, e.st, e.eng).Set(context.Background(), saved); err != nil {

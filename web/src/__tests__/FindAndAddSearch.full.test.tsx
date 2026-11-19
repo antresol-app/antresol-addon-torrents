@@ -563,7 +563,7 @@ describe('Поиск', () => {
     expect(screen.queryByText('Ничего не нашлось.')).not.toBeInTheDocument()
   })
 
-  it('«Сериалы» narrows «Найти и добавить» to series, and it says «Сериалы»', async () => {
+  it('«Сериалы» puts the series first, and it says «Сериалы»; the films follow under «Среди фильмов»', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: RequestInfo | URL) => {
@@ -581,8 +581,11 @@ describe('Поиск', () => {
     renderSearch('/search?q=дюна&scope=series')
     const add = await screen.findByRole('region', { name: 'Найти и добавить' }, { timeout: 3000 })
     expect(await within(add).findByText('Dune: Prophecy II', {}, { timeout: 3000 })).toBeInTheDocument()
-    expect(within(add).queryByText('Dune: Part Three')).not.toBeInTheDocument()
     expect(within(add).getByText('Сериалы')).toBeInTheDocument()
+    // the film is not hidden by the filter: after the series, under its own heading
+    const films = within(add).getByRole('heading', { name: 'Среди фильмов' })
+    const order = [within(add).getByText('Dune: Prophecy II'), films, within(add).getByText('Dune: Part Three')]
+    for (let i = 1; i < order.length; i++) expect(order[i - 1]!.compareDocumentPosition(order[i]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('«Одобрить»\'s release picker asks for the requested album\'s releases', async () => {

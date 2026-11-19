@@ -22,6 +22,7 @@ import type {
   MigrateStatus,
   MigrateSwitchPlan,
   ImportedSource,
+  ProwlarrLink,
   Pin,
   PinTitle,
   PromoteResult,
@@ -328,5 +329,7 @@ export const migrateSwitch = (req: { confirm: number; arrStopped: boolean }) => 
 /** «Подключить» a service over its API: kept (in the addon's memory) only when it answers; the key and the password are never answered back. */
 export const migrateConnect = (id: string, req: MigrateConnectRequest) =>
   api.post<{ detail: string; connect: MigrateConnect }>(`admin/migrate/sources/${encodeURIComponent(id)}/connect`, req)
+/** How Prowlarr's tracker list is reached now (reads no database). */
+export const getProwlarrLink = (signal?: AbortSignal) => api.get<{ link: ProwlarrLink }>('admin/migrate/prowlarr', signal)
 /** «Забыть»: drops the kept connection. */
 export const migrateForget = (id: string) => api.del<void>(`admin/migrate/sources/${encodeURIComponent(id)}/connect`)

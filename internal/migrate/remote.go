@@ -117,6 +117,32 @@ func (s *Service) Remote(id string) (RemoteView, bool) {
 	return v, true
 }
 
+// How Prowlarr's tracker list is reached (ProwlarrLink): its prowlarr.db
+// mounted under /import, a connection over its API kept for this run of
+// the addon, or neither.
+const (
+	ProwlarrFile = "file"
+	ProwlarrAPI  = "api"
+	ProwlarrNone = "none"
+)
+
+// ProwlarrLink is how Prowlarr is reached now, for «Источники»: only the
+// way, never its address, key or password. Prowlarr only lends its
+// tracker list: searches ask each source directly.
+func (s *Service) ProwlarrLink() string {
+	src := s.source(SourceProwlarr)
+	switch {
+	case src == nil:
+		return ProwlarrNone
+	case mounted(src):
+		return ProwlarrFile
+	}
+	if _, ok := s.remotes.get(SourceProwlarr); ok {
+		return ProwlarrAPI
+	}
+	return ProwlarrNone
+}
+
 // Connect checks r against the service id (its address answers, the key
 // or the login is taken) and keeps it for the migration; detail is what
 // it found («312 сериалов, 40 отслеживается»). A blank key or password

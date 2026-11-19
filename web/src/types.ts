@@ -119,7 +119,14 @@ export interface Source {
   priority: number
   /** This source is the backup way into that one (the same site signed in another way): searched only when it fails, shown inside it. */
   fallbackFor?: number
+  /** 'prowlarr': brought in from Prowlarr's indexer list (searches still ask the site itself). */
+  origin?: 'prowlarr' | (string & {})
+  /** RFC 3339: the last import from Prowlarr that listed it. */
+  syncedAt?: string
 }
+
+/** GET x/admin/migrate/prowlarr: how Prowlarr's tracker list is reached now (never its address or key). */
+export type ProwlarrLink = 'file' | 'api' | 'none'
 
 export interface CatalogOption {
   value: string
@@ -239,6 +246,8 @@ export interface Candidate {
   matchedTrack?: string
   /** Music of the artist the query names («metallica» → their albums, listed first): that artist. */
   byArtist?: string
+  /** Video: TMDB had nothing for the query as typed; a title within a few edits of it («Джентельмены» → «Джентльмены»). */
+  approx?: boolean
 }
 
 export interface Release {

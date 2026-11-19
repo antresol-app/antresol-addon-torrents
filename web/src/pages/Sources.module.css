@@ -6,6 +6,11 @@
   padding: 0;
   list-style: none;
 }
+.prowlarrLink {
+  margin: 0 0 var(--s-3);
+  color: var(--label-2);
+  font: var(--t-footnote);
+}
 .importField {
   width: 100%;
   margin-top: var(--s-4);

@@ -68,6 +68,8 @@ type ScoredRelease struct {
 	// «Формат загрузки» (listed last, never picked by itself).
 	AudioFormat    string
 	FormatMismatch bool
+	// topic: what the release page said of its voice-overs (Info has it)
+	topic topicInfo
 }
 
 // MarshalJSON uses camelCase names (cardigann.Result has no tags).
@@ -165,6 +167,9 @@ type found struct {
 	direct  bool                 // the source's links are direct downloads
 	tags    map[string]directTag // OPDS: the format of each link
 	done    bool
+	// topics: what release pages said of their voice-overs, by Details
+	// link (readTopics; nil until read)
+	topics map[string]topicInfo
 }
 
 // Search queries all enabled sources in parallel (each limited by the
@@ -269,7 +274,7 @@ func (m *Manager) Search(ctx context.Context, q SearchRequest) (SearchResponse, 
 			var f found
 			if isOPDS(s) {
 				res, tags, err := m.searchOPDS(ctx, s, q, queries)
-				f = found{s, res, err, true, tags, true}
+				f = found{s, res, err, true, tags, true, nil}
 			} else {
 				var res []Result
 				var err error
@@ -278,15 +283,20 @@ func (m *Manager) Search(ctx context.Context, q SearchRequest) (SearchResponse, 
 				} else {
 					res, err = m.searchSource(ctx, s, q, queries)
 				}
-				f = found{s, res, err, m.directDef(s), nil, true}
+				f = found{s, res, err, m.directDef(s), nil, true, nil}
 				if b, ok := backup[s.ID]; ok && err != nil && ctx.Err() == nil && !m.isResting(b.ID) {
 					// the second way in, only now: the tracker is asked
 					// once per search, not twice
 					if res, berr := m.searchSource(ctx, b, q, queries); berr == nil {
 						m.log.Info("indexer: answered through the backup source", "source", s.Name, "backup", b.Name)
 						b.Name = s.Name // one tracker to the user; downloads go through b
-						f = found{b, res, nil, m.directDef(b), nil, true}
+						f = found{b, res, nil, m.directDef(b), nil, true, nil}
 					}
+				}
+				if len(f.results) > 0 && ctx.Err() == nil {
+					// the voice-overs of release pages (a Russian
+					// tracker's; topicBudget at most, cached)
+					f.topics = m.readTopics(ctx, f.src, q, f.results)
 				}
 			}
 			mu.Lock()
@@ -334,7 +344,7 @@ func (m *Manager) assemble(ctx context.Context, q SearchRequest, prefs Prefs, ou
 			if r.Link == "" && r.Magnet == "" {
 				continue // nothing to download
 			}
-			c := ScoredRelease{Result: r, SourceID: f.src.ID, SourceName: f.src.Name}
+			c := ScoredRelease{Result: r, SourceID: f.src.ID, SourceName: f.src.Name, topic: f.topics[r.Details]}
 			if f.direct {
 				c.Direct, c.directTag = true, f.tags[r.Link]
 			}
@@ -351,7 +361,7 @@ func (m *Manager) assemble(ctx context.Context, q SearchRequest, prefs Prefs, ou
 		}
 	}
 	for _, c := range candidates {
-		c.Info = release.Parse(c.Title)
+		c.Info = withTopic(release.Parse(c.Title), c.topic, want.Studios)
 		w := want
 		if russian[c.SourceID] {
 			w.DefaultLang = "ru" // a Russian tracker names a translation only when it is not Russian

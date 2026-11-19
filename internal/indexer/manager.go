@@ -45,7 +45,15 @@ type Source struct {
 	// FallbackFor: this source is the backup way into that one (RuTracker
 	// by cookie for RuTracker by login): searched only when it fails.
 	FallbackFor int64 `json:"fallbackFor,omitempty"`
+	// Origin: OriginProwlarr for a source a Prowlarr indexer list brought
+	// in, "" for one added by hand; SyncedAt: the last import that listed
+	// it. Searches never go through Prowlarr: the source is asked itself.
+	Origin   string    `json:"origin,omitempty"`
+	SyncedAt time.Time `json:"syncedAt,omitzero"`
 }
+
+// OriginProwlarr is Source.Origin of a source from Prowlarr's list.
+const OriginProwlarr = "prowlarr"
 
 // SourcePatch changes a source; nil fields stay. Settings are merged; an
 // empty value deletes a setting, RedactedValue keeps it.
@@ -98,6 +106,9 @@ type Manager struct {
 	// directHTTP is the client of a direct-download source: opdsHTTP (the
 	// home-network guard unless allow_local). A field for tests.
 	directHTTP func(Source) *http.Client
+
+	// topics: what release pages said of their voice-overs (topic.go)
+	topics topicCache
 }
 
 // A runner keeps the login session of a source between searches.
@@ -166,17 +177,21 @@ func (m *Manager) Redact(s Source) Source {
 	return s.redacted(def)
 }
 
-const sourceCols = `id, definition_id, name, enabled, settings_json, status, last_error, last_checked, priority, fallback_for`
+const sourceCols = `id, definition_id, name, enabled, settings_json, status, last_error, last_checked, priority, fallback_for, origin, synced_at`
 
 func scanSource(row interface{ Scan(...any) error }) (Source, error) {
 	var s Source
 	var settings string
 	var checked sql.NullString
 	var fallbackFor sql.NullInt64
-	if err := row.Scan(&s.ID, &s.DefinitionID, &s.Name, &s.Enabled, &settings, &s.Status, &s.LastError, &checked, &s.Priority, &fallbackFor); err != nil {
+	var origin, synced sql.NullString
+	if err := row.Scan(&s.ID, &s.DefinitionID, &s.Name, &s.Enabled, &settings, &s.Status, &s.LastError, &checked, &s.Priority, &fallbackFor, &origin, &synced); err != nil {
 		return s, err
 	}
-	s.FallbackFor = fallbackFor.Int64
+	s.FallbackFor, s.Origin = fallbackFor.Int64, origin.String
+	if synced.Valid {
+		s.SyncedAt, _ = time.Parse(time.RFC3339, synced.String)
+	}
 	s.Settings = map[string]string{}
 	if err := json.Unmarshal([]byte(settings), &s.Settings); err != nil {
 		return s, fmt.Errorf("indexer: source %d settings: %w", s.ID, err)

@@ -116,3 +116,7 @@
     inset: calc(-1 * var(--s-2)) 0;
   }
 }
+
+.origin {
+  margin: var(--s-1) 0 0;
+}

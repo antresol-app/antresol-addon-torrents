@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/antresol-app/antresol/addonkit"
@@ -120,7 +121,11 @@ func (s *settings) putFlareSolverr(w http.ResponseWriter, r *http.Request) {
 			effective = s.FlareSolverrHelper.Address() // "" while not found
 		}
 		s.Sources.SetFlareSolverr(effective)
-		go s.Sources.RecheckFailed(context.WithoutCancel(r.Context()))
+		background.Go(func() { s.Sources.RecheckFailed(context.WithoutCancel(r.Context())) })
 	}
 	addonkit.WriteJSON(w, http.StatusOK, out)
 }
+
+// background holds the rechecks a FlareSolverr change starts after its
+// answer; a test waits for them before its temporary dirs go.
+var background sync.WaitGroup

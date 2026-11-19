@@ -39,11 +39,11 @@ func versions(t *testing.T, d *sql.DB) []int {
 }
 
 // TestStore_MigratesFresh: a new torrents.db gets the twelve replayed
-// migrations, the addon's own ones (0013, 0014, 0015) and the family's tables; no core
+// migrations, the addon's own ones (0013–0016) and the family's tables; no core
 // table is referenced (a follow of user 42 goes in with no users table).
 func TestStore_MigratesFresh(t *testing.T) {
 	d := open(t, filepath.Join(t.TempDir(), "torrents.db"))
-	if got, want := versions(t, d), []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}; !slices.Equal(got, want) {
+	if got, want := versions(t, d), []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}; !slices.Equal(got, want) {
 		t.Fatalf("versions %v, want %v", got, want)
 	}
 	for _, tbl := range []string{"torrents", "torrent_pieces", "sources", "acquisitions", "follows", "release_attempts", "release_switch_failures", "pinned_releases"} {
@@ -72,6 +72,13 @@ func TestStore_MigratesFresh(t *testing.T) {
 			t.Fatalf("column %s.%s: %d %v", col[0], col[1], n, err)
 		}
 	}
+	// 0016: where a source came from
+	for _, col := range []string{"origin", "synced_at"} {
+		var n int
+		if err := d.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('sources') WHERE name=?`, col).Scan(&n); err != nil || n != 1 {
+			t.Fatalf("column sources.%s: %d %v", col, n, err)
+		}
+	}
 	var fk int
 	if err := d.QueryRow(`PRAGMA foreign_keys`).Scan(&fk); err != nil || fk != 1 {
 		t.Fatalf("foreign_keys %d %v", fk, err)
@@ -94,7 +101,7 @@ func TestStore_Reopen(t *testing.T) {
 	}
 	d.Close()
 	d = open(t, p)
-	if got := versions(t, d); len(got) != 15 {
+	if got := versions(t, d); len(got) != 16 {
 		t.Fatalf("versions %v", got)
 	}
 	var n int

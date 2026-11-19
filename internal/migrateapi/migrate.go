@@ -43,6 +43,7 @@ func Routes(d Deps) http.Handler {
 	mux.HandleFunc("POST /api/admin/migrate/switch", h.doSwitch)
 	mux.HandleFunc("POST /api/admin/migrate/sources/{id}/connect", h.connect)
 	mux.HandleFunc("DELETE /api/admin/migrate/sources/{id}/connect", h.forget)
+	mux.HandleFunc("GET /api/admin/migrate/prowlarr", h.prowlarr)
 	return mux
 }
 
@@ -357,4 +358,10 @@ func (h *api) forget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	addonkit.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// prowlarr is how Prowlarr's tracker list is reached now ({"link": "file"
+// | "api" | "none"}), for «Источники»; it reads no database.
+func (h *api) prowlarr(w http.ResponseWriter, r *http.Request) {
+	addonkit.WriteJSON(w, http.StatusOK, map[string]string{"link": h.d.Migrate.ProwlarrLink()})
 }

@@ -6,7 +6,8 @@
 // addon's own state (settings, import_state, import_refs), 0014 the follows'
 // user_gone mark, 0015 the rows' profile uid (follows.user_uid,
 // pinned_releases.pinned_by_uid, torrents.added_by_uid,
-// acquisitions.added_by_uid).
+// acquisitions.added_by_uid), 0016 where a source came from
+// (sources.origin, sources.synced_at).
 package store
 
 import (

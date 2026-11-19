@@ -136,3 +136,20 @@ func TestConnectQBittorrent(t *testing.T) {
 		t.Fatalf("view %+v", v)
 	}
 }
+
+// «Источники» says how Prowlarr's list is reached: its database mounted,
+// or nothing (a connection over the API is the third way).
+func TestProwlarrLink(t *testing.T) {
+	e := newSvcEnv(t, nil)
+	if got := e.s.ProwlarrLink(); got != ProwlarrNone {
+		t.Fatalf("nothing: %q", got)
+	}
+	e.s.remotes.set(SourceProwlarr, Remote{URL: "http://p:9696", APIKey: "k"})
+	if got := e.s.ProwlarrLink(); got != ProwlarrAPI {
+		t.Fatalf("over the API: %q", got)
+	}
+	writeFile(t, e.s.Paths.Prowlarr, "x")
+	if got := e.s.ProwlarrLink(); got != ProwlarrFile {
+		t.Fatalf("mounted: %q", got)
+	}
+}

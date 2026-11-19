@@ -29,7 +29,7 @@ import {
   type WatchWay,
 } from '@antresol/addon-sdk'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { discover, ID } from '../api'
 import { useT, type Key } from '../i18n'
 import { DownloadControl } from '../shared/DownloadControl'
@@ -68,6 +68,13 @@ function libraryPath(c: Candidate): string | undefined {
 const SCOPE_KIND: Partial<Record<SearchScope, string>> = { movies: 'movie', series: 'series' }
 const SCOPE_LABEL: Partial<Record<SearchScope, Key>> = { movies: 'common.movies', series: 'common.series' }
 const SCOPE_DISCOVER: Record<SearchScope, DiscoverKind> = { all: 'video', movies: 'video', series: 'video', music: 'music', books: 'book', audiobooks: 'audiobook', comics: 'comic' }
+/** «Фильмы» / «Сериалы»: the other kind of the same answer, a few of it under its own heading (the scope switches to it for the rest). */
+const SCOPE_OTHER: Partial<Record<SearchScope, { scope: SearchScope; kind: string; title: Key }>> = {
+  movies: { scope: 'series', kind: 'series', title: 'search.alsoSeries' },
+  series: { scope: 'movies', kind: 'movie', title: 'search.alsoMovies' },
+}
+/** How many of the other kind «Фильмы» / «Сериалы» still show. */
+const OTHER_KIND_SHOWN = 3
 
 interface CandidateGroup {
   key: string
@@ -115,8 +122,25 @@ export function FindAndAdd({ text, q, scope, nothing, admin, kind }: { text: str
   // answer here (no new request), and the title says so
   const wanted = SCOPE_KIND[scope]
   const items = found.status === 'ready' ? (wanted ? found.items.filter((c) => c.kind === wanted) : found.items) : []
+  // …but a title of the other kind is not hidden behind the filter: «Сериалы»
+  // still shows the film «The Gentlemen», a few under «Среди фильмов»
+  const other = kind ? undefined : SCOPE_OTHER[scope]
+  const others = found.status === 'ready' && other ? found.items.filter((c) => c.kind === other.kind) : []
+  const [, setParams] = useSearchParams()
+  const switchTo = (s: SearchScope) =>
+    setParams(
+      (p) => {
+        const n = new URLSearchParams(p)
+        n.set('scope', s)
+        n.delete('dk')
+        return n
+      },
+      { replace: true },
+    )
+  // TMDB had nothing for the query as typed: these are titles a typo away
+  const approx = found.status === 'ready' && found.items.length > 0 && found.items.every((c) => c.approx)
   // nothing here either: the page's one empty state says it, not a second, empty section
-  if (nothing && found.status === 'ready' && items.length === 0) return null
+  if (nothing && found.status === 'ready' && items.length === 0 && others.length === 0) return null
   return (
     <section className={styles.section} aria-labelledby="find-add">
       <div className={styles.discoverHeader}>
@@ -131,9 +155,10 @@ export function FindAndAdd({ text, q, scope, nothing, admin, kind }: { text: str
           <Icon name="cloud" size={18} /> {found.message}
         </p>
       )}
-      {found.status === 'ready' && items.length === 0 && (
+      {found.status === 'ready' && items.length === 0 && others.length === 0 && (
         <p className={styles.muted}>{t('search.discoverNothingMore')}</p>
       )}
+      {approx && (items.length > 0 || others.length > 0) && <p className={styles.muted}>{t('search.approx')}</p>}
       {found.status === 'ready' &&
         candidateGroups(items).map((g) => (
           <div key={g.key} className={styles.candidateGroup}>
@@ -149,6 +174,23 @@ export function FindAndAdd({ text, q, scope, nothing, admin, kind }: { text: str
             </ul>
           </div>
         ))}
+      {other && others.length > 0 && (
+        <div className={styles.candidateGroup}>
+          <div className={styles.groupHead}>
+            <h3 className={styles.groupTitle}>{t(other.title)}</h3>
+            {others.length > OTHER_KIND_SHOWN && (
+              <Button variant="plain" size="small" onClick={() => switchTo(other.scope)}>
+                {t('search.alsoShowAll', { n: others.length })}
+              </Button>
+            )}
+          </div>
+          <ul className={styles.candidates}>
+            {others.slice(0, OTHER_KIND_SHOWN).map((c) => (
+              <CandidateRow key={`${c.kind}-${c.tmdbId}`} c={c} admin={admin} />
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   )
 }

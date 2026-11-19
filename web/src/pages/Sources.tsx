@@ -1,13 +1,13 @@
 // «Источники»: the configured torrent sites as cards with a plain status
 // and an on/off switch; «Добавить источник» and «Импортировать из Prowlarr».
 import { ApiError, useEvents, Icon, ui } from '@antresol/addon-sdk'
-import { deleteSource, getCatalog, getSources, importProwlarr, testSource, updateSource } from '../api'
-import { type ImportedSource, type Source } from '../types'
+import { deleteSource, getCatalog, getProwlarrLink, getSources, importProwlarr, testSource, updateSource } from '../api'
+import { type ImportedSource, type ProwlarrLink, type Source } from '../types'
 import { SourceCard } from './SourceCard'
 import { tr, useT } from '../i18n'
 import { setTitle } from '../title'
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import m from "./Manage.module.css";
 import styles from "./Sources.module.css";
 
@@ -41,6 +41,20 @@ function useLanguages() {
   return map;
 }
 
+/** How Prowlarr's tracker list is reached now; null until known (or when the addon cannot say). */
+function useProwlarrLink() {
+  const [link, setLink] = useState<ProwlarrLink | null>(null);
+  useEffect(() => {
+    const ac = new AbortController();
+    getProwlarrLink(ac.signal).then(
+      (r) => setLink(r.link),
+      () => {},
+    );
+    return () => ac.abort();
+  }, []);
+  return link;
+}
+
 export function Sources() {
   const t = useT();
   const navigate = useNavigate();
@@ -50,6 +64,7 @@ export function Sources() {
   const [removing, setRemoving] = useState<Source | null>(null);
   const [importing, setImporting] = useState(false);
   const langs = useLanguages();
+  const prowlarr = useProwlarrLink();
 
   const load = useCallback((quiet = false) => {
     if (!quiet) setState({ status: "loading" });
@@ -164,6 +179,12 @@ export function Sources() {
           </ButtonLink>
         </div>
       </header>
+      {prowlarr && list.some((s) => s.origin === "prowlarr") && (
+        <p className={styles.prowlarrLink} data-testid="prowlarr-link">
+          {t(`sources.prowlarrLink.${prowlarr}`)}{" "}
+          <Link to="/addons/torrents/migrate">{t("sources.prowlarrLink.manage")}</Link>
+        </p>
+      )}
       {problem && (
         <div className={m.problem} role="alert">
           {problem}

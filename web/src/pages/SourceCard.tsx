@@ -1,13 +1,15 @@
 // A torrent source in «Источники»: name, language, status in plain words
 // («Подключено ✓» or «Ошибка: …»), an on/off switch and a ⋯ menu
 // (change, check again, remove). A backup way in (RuTracker by cookie for
-// RuTracker by login) is one more line of the same card.
+// RuTracker by login) is one more line of the same card. A source brought
+// in from Prowlarr's list says so («из Prowlarr · 2 ч назад»).
 import { locale, Icon, ui } from '@antresol/addon-sdk'
+import { ago } from '../format'
 import { type Source } from '../types'
 import { tr, useT } from '../i18n'
 import styles from "./SourceCard.module.css";
 
-const { IconButton, MenuItem, MenuSeparator, Menu, Toggle } = ui
+const { Badge, IconButton, MenuItem, MenuSeparator, Menu, Toggle } = ui
 
 export interface SourceCardProps {
   source: Source;
@@ -70,6 +72,15 @@ export function SourceCard({
         <div className={styles.text}>
           <p className={styles.name}>{s.name}</p>
           {lang && <p className={styles.lang}>{lang}</p>}
+          {s.origin === "prowlarr" && (
+            <p className={styles.origin}>
+              <Badge>
+                {s.syncedAt
+                  ? t("comp.source.prowlarrSynced", { ago: ago(s.syncedAt) })
+                  : t("comp.source.prowlarr")}
+              </Badge>
+            </p>
+          )}
         </div>
         <Toggle
           label={t("comp.source.toggle", {
