@@ -491,6 +491,23 @@ func pinLink(pin pinned.Pin) (link string, src int64, err error) {
 	return link, src, err
 }
 
+// streamRequest is the request that streams {season, episode} (a film:
+// neither) from the pin for u: the pin's own link (never a download).
+func streamRequest(u addonkit.User, kind string, t tracking.Title, pin pinned.Pin, season, episode int) (acquire.AcquireRequest, error) {
+	link, src, err := pinLink(pin)
+	if err != nil {
+		return acquire.AcquireRequest{}, err
+	}
+	req := acquire.AcquireRequest{TMDBID: int(t.TMDBID), Kind: acquire.KindSeries, Mode: acquire.ModeStream,
+		ReleaseLink: link, SourceID: src, UserID: u.ID, UserUID: u.UID, CheckLink: !u.IsAdmin}
+	if kind == "movie" {
+		req.Kind = acquire.KindMovie
+	} else {
+		req.Season, req.Episode = season, episode
+	}
+	return req, nil
+}
+
 // playEpisode streams {season, episode} (a film: neither) from the pin,
 // as «Смотреть» of a release row does (never a follow, never a download),
 // and answers the core input of the stream's file: {inputId}.
@@ -507,17 +524,10 @@ func (p *pinnedAPI) playEpisode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u := user(r)
-	link, src, err := pinLink(pin)
+	req, err := streamRequest(u, kind, t, pin, in.Season, in.Episode)
 	if err != nil {
 		internalErr(w, r, "pinned play source", err)
 		return
-	}
-	req := acquire.AcquireRequest{TMDBID: int(t.TMDBID), Kind: acquire.KindSeries, Mode: acquire.ModeStream,
-		ReleaseLink: link, SourceID: src, UserID: u.ID, UserUID: u.UID, CheckLink: !u.IsAdmin}
-	if kind == "movie" {
-		req.Kind = acquire.KindMovie
-	} else {
-		req.Season, req.Episode = in.Season, in.Episode
 	}
 	out, err := p.Acquire.Acquire(r.Context(), req)
 	if err != nil {

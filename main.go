@@ -240,7 +240,19 @@ func main() {
 			// «Следить», the pinned releases, «Найти озвучку…»
 			ad := followapi.Deps{Follows: svc.Follows, Pins: svc.Pins, Acquire: svc.Acq, Library: coreadapt.Library{C: core},
 				Watch: wd.Watch, WatchError: watch.WriteError, Added: pusher.Changed}
-			profileAPI.set(profileRoutes(wd, fd, ad))
+			routes := profileRoutes(wd, fd, ad)
+			// the app protocol: «Смотреть сейчас», «Скачать» and the search
+			// as data for the native apps (find/app.go)
+			find.RegisterApp(routes, find.AppDeps{
+				Deps:        fd,
+				HasSources:  svc.Sources.HasEnabled,
+				HasMetadata: svc.Acq.HasMetadata,
+				Seasons:     svc.Acq.Seasons,
+				PlayPinned:  ad.PlayPinned,
+				Watch:       wd.Watch,
+				WatchError:  watch.WriteError,
+			})
+			profileAPI.set(routes)
 			mediaRoutes.set(watch.Media(wd))
 			status.clear()
 			ready.Set()

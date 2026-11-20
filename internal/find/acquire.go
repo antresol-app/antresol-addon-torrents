@@ -32,25 +32,38 @@ func (h *handlers) acquire(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, r, http.StatusBadRequest, "Неизвестное качество")
 		return
 	}
-	u := user(r)
+	res, err := h.acquireAs(r.Context(), user(r), h.myLanguages(r), req)
+	if err != nil {
+		acquireErr(w, r, "acquire", err)
+		return
+	}
+	res.Note = i18n.Localize(r.Context(), res.Note)
+	addonkit.WriteJSON(w, http.StatusOK, res)
+}
+
+// acquireAs is the add for profile u (whose «Языки» are mine): the
+// request gets its owner and languages, a non-admin's link is checked, and
+// what follows a start runs: the holds go out, «Выбрать другую раздачу»
+// replaces the title's unfinished download, an admin's download approves
+// the kids' requests of the title. The note is left in Russian.
+func (h *handlers) acquireAs(ctx context.Context, u addonkit.User, mine []string, req acquire.AcquireRequest) (acquire.AcquireResult, error) {
 	req.UserID, req.UserUID = u.ID, u.UID
-	req.Langs = h.myLanguages(r)
+	req.Langs = mine
 	req.Force = req.Force && u.IsAdmin // only an admin may download onto a full disk
 	if !u.IsAdmin {
 		req.Files = nil
 		req.CheckLink = true
 	}
-	res, err := h.Acquire.Acquire(r.Context(), req)
+	res, err := h.Acquire.Acquire(ctx, req)
 	if err != nil {
-		acquireErr(w, r, "acquire", err)
-		return
+		return res, err
 	}
 	if h.Added != nil {
 		h.Added()
 	}
 	if req.Replace && req.Mode == acquire.ModeDownload && (req.Kind == acquire.KindMovie || req.Kind == acquire.KindSeries) {
 		// «Выбрать другую раздачу»: the old unfinished download goes once the new one is in
-		if _, err := h.Acquire.CancelTitle(r.Context(), req.Kind, req.TMDBID, req.Season, res.InfoHash); err != nil {
+		if _, err := h.Acquire.CancelTitle(ctx, req.Kind, req.TMDBID, req.Season, res.InfoHash); err != nil {
 			slog.Warn("find: replace download", "kind", req.Kind, "tmdbId", req.TMDBID, "err", err)
 		}
 	}
@@ -58,15 +71,14 @@ func (h *handlers) acquire(w http.ResponseWriter, r *http.Request) {
 		// «Одобрить» of «Запросы» is this download (from there or from anywhere)
 		// (the download runs whatever the tab does next: so does the approve)
 		a := addonkit.ApproveRequest{AdminID: u.ID, Kind: req.Kind, TMDBID: req.TMDBID, ExtID: req.ExtID, Title: req.Title, Artist: req.Artist}
-		actx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), approveTimeout)
+		actx, cancel := context.WithTimeout(context.WithoutCancel(ctx), approveTimeout)
 		_, err := h.Approve(actx, a)
 		cancel()
 		if err != nil {
 			slog.Warn("find: approve requests", "kind", req.Kind, "tmdbId", req.TMDBID, "extId", req.ExtID, "err", err)
 		}
 	}
-	res.Note = i18n.Localize(r.Context(), res.Note)
-	addonkit.WriteJSON(w, http.StatusOK, res)
+	return res, nil
 }
 
 // titleProgress is a title's progress as the route answers it: the hint

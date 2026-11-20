@@ -66,7 +66,7 @@ func TestManifest(t *testing.T) {
 		Audience string            `json:"audience"`
 	}
 	json.Unmarshal(m.Notify, &topics)
-	if m.ID != "torrents" || m.Version != "0.4.12" || m.Contract != 1 || m.Access != "adults" ||
+	if m.ID != "torrents" || m.Version != "0.4.13" || m.Contract != 1 || m.Access != "adults" ||
 		!slices.Equal(m.Permissions, perms) || !slices.Equal(m.Hooks, hooks) ||
 		len(topics) != 1 || topics[0].Topic != "downloads" || topics[0].Audience != "admins" ||
 		topics[0].Title["ru"] != "Загрузки" || topics[0].Title["en"] != "Downloads" ||

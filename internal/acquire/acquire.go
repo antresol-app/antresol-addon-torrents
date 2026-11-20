@@ -835,6 +835,27 @@ func searchBoth(ctx context.Context, m Metadata, q string) (movies, shows []tmdb
 
 func isVideoKind(k string) bool { return k == KindMovie || k == KindSeries }
 
+// HasMetadata says whether TMDB can be asked (the core's metadata has it
+// on): without it nothing of a film or series is found or searched.
+func (s *Service) HasMetadata() bool { return s.o.Metadata != nil }
+
+// Seasons are the seasons of a TMDB series with their episode counts, in
+// order; the specials (season 0) are left out. Empty: TMDB lists none.
+func (s *Service) Seasons(ctx context.Context, tmdbID int) ([]tmdb.SeasonCount, error) {
+	d, err := s.title(ctx, KindSeries, tmdbID)
+	if err != nil {
+		return nil, err
+	}
+	var out []tmdb.SeasonCount
+	for _, sc := range d.Seasons {
+		if sc.Number > 0 {
+			out = append(out, sc)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Number < out[j].Number })
+	return out, nil
+}
+
 // title fetches TMDB details of a title.
 func (s *Service) title(ctx context.Context, kind string, id int) (tmdb.Details, error) {
 	m, err := s.meta()
