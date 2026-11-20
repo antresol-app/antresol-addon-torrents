@@ -56,6 +56,7 @@ func (h *handlers) releases(w http.ResponseWriter, r *http.Request) {
 		Year: queryInt(r, "year"), Aliases: q["alias"],
 	}
 	mine := h.myLanguages(r)
+	req.Langs = mine
 	if q.Get("stream") != "1" {
 		resp, err := h.Acquire.Releases(r.Context(), req, nil)
 		if err != nil {

@@ -85,6 +85,53 @@ describe("Prowlarr import sheet", () => {
   });
 });
 
+describe("Prowlarr import over «Переезд»'s connection", () => {
+  it("offers the kept API connection first, sends via api, and lists what was skipped and why", async () => {
+    const bodies: unknown[] = [];
+    vi.stubGlobal("EventSource", FakeSource);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes("/x/admin/migrate/prowlarr")) return json({ link: "api" });
+        if (url.includes("/x/admin/sources/import-prowlarr")) {
+          bodies.push(JSON.parse(String(init?.body)));
+          return json({
+            via: "api",
+            imported: [
+              { name: "RuTor", source: src(7, "RuTor") },
+              { name: "NZBgeek", reason: "Тип «Newznab» не поддерживается: Antresol подключает только торрент-трекеры" },
+            ],
+          });
+        }
+        if (/\/x\/admin\/sources\/\d+\/test/.test(url)) return json(src(7, "RuTor"));
+        if (url.includes("/api/addons/torrents/x/admin/sources")) return json([]);
+        if (url.includes("/api/catalog")) return json([]);
+        return json({ error: "нет" }, 404);
+      }),
+    );
+    render(
+      <MemoryRouter>
+        <Sources />
+      </MemoryRouter>,
+    );
+    const open = await screen.findByRole("button", { name: "Импортировать из Prowlarr" });
+    // the link is asked on the page's load: wait for it before opening
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([u]) => String(u).includes("/migrate/prowlarr"))).toBe(true));
+    await new Promise((r) => setTimeout(r, 0));
+    await userEvent.click(open);
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(/сохранённому на странице «Переезд»/)).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("Файл настроек Prowlarr")).toBeNull();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Импортировать" }));
+    expect(await within(dialog).findByText(/Добавлено: 1\./)).toBeInTheDocument();
+    expect(bodies).toEqual([{ via: "api" }]);
+    expect(
+      within(dialog).getByText("NZBgeek — Тип «Newznab» не поддерживается: Antresol подключает только торрент-трекеры"),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("a backup way in", () => {
   it("shows RuTracker by cookie inside RuTracker by login: one card, its own status and actions", async () => {
     const list: Source[] = [

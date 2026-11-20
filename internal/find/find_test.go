@@ -345,6 +345,10 @@ func TestAcquire_AdultAddsAndOwns(t *testing.T) {
 	if r.UserID != 5 || r.Files != nil || r.Force || !r.CheckLink || r.ReleaseLink != "https://t/x" {
 		t.Fatalf("%+v", r)
 	}
+	// the profile's «Языки» go with it (the server's pick prefers their subtitles)
+	if !reflect.DeepEqual(r.Langs, []string{"ru", "en"}) {
+		t.Fatalf("langs %v", r.Langs)
+	}
 	if e.added != 1 || len(e.approved) != 0 {
 		t.Fatalf("added %d approved %v", e.added, e.approved)
 	}

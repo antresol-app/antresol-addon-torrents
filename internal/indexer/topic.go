@@ -12,7 +12,8 @@ import (
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/release"
 )
 
-// A Russian tracker's release name often leaves out its voice-overs
+// A Russian tracker's release name often leaves out its voice-overs (and
+// its audio tracks and subtitles: «Аудио 2: English», «Субтитры: русские»)
 // («… WEB-DL 1080p | P») while the release page lists them («Перевод:
 // Профессиональный (многоголосый) LostFilm»). So for the releases of such
 // a source whose name names no studio, the search reads their pages —
@@ -34,9 +35,18 @@ type topicInfo struct {
 	Studios []string // known studios, canonical names
 	Audio   []string // "Dub" | "MVO" | "AVO", as release.Parse names them
 	Voice   string   // the voice-over lines, for studios the household typed
+	// Tracks: its «Аудио N:» lines (one per track); Subs: the languages of
+	// its «Субтитры:» line ("sub": a language not named).
+	Tracks tracksInfo
+	Subs   []string
 }
 
-func (t topicInfo) empty() bool { return len(t.Studios) == 0 && len(t.Audio) == 0 && t.Voice == "" }
+func (t topicInfo) empty() bool {
+	return len(t.Studios) == 0 && len(t.Audio) == 0 && t.Voice == "" && t.Tracks.Tracks == 0 && len(t.Langs()) == 0 && len(t.Subs) == 0
+}
+
+// Langs are the audio languages the page named.
+func (t topicInfo) Langs() []string { return t.Tracks.Langs }
 
 // voiceLine is a release page line about its voice-overs: «Перевод:»,
 // «Перевод 1:», «Озвучивание:», «Озвучка:», «Звук:», «Аудио 2:» and their
@@ -46,6 +56,7 @@ var voiceLine = regexp.MustCompile(`(?im)^[\s*•·\-]*(перевод|озву�
 // parseTopic reads the voice-over lines of a release page's text.
 func parseTopic(text string) topicInfo {
 	var t topicInfo
+	t.Tracks, t.Subs = pageTracks(text)
 	var lines []string
 	for _, m := range voiceLine.FindAllStringSubmatch(text, 40) {
 		v := strings.TrimSpace(m[2])

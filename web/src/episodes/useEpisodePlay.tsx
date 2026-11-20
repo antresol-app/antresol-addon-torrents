@@ -31,7 +31,7 @@ export function useEpisodePlay(ctx: EpisodeCtx): EpisodePlay | null {
   const t = useT()
   const navigate = useNavigate()
   const user = useUser()
-  const { state, run, reset } = useAcquire()
+  const { state, run, reset, track, cancel } = useAcquire()
   const [releases, setReleases] = useState<At | null>(null)
   const [picked, setPicked] = useState<string | null>(null)
   const [note, setNote] = useState<{ text: string; error?: boolean; key: number } | null>(null)
@@ -50,8 +50,8 @@ export function useEpisodePlay(ctx: EpisodeCtx): EpisodePlay | null {
   }, [streamError])
 
   // the latest render's values for the stable answer's functions
-  const live = useRef({ ctx, run, reset, t, navigate })
-  live.current = { ctx, run, reset, t, navigate }
+  const live = useRef({ ctx, run, reset, t, navigate, track })
+  live.current = { ctx, run, reset, t, navigate, track }
   const target = (at: At): AcquireTarget => {
     const c = live.current.ctx
     return { tmdbId: c.tmdbId, kind: c.kind, title: c.title, poster: c.poster, ...(c.kind === 'series' ? { season: at.season, episode: at.episode } : {}) }
@@ -72,7 +72,7 @@ export function useEpisodePlay(ctx: EpisodeCtx): EpisodePlay | null {
           role="dialog"
           size="large"
           dismissOnOutside
-          onCancel={() => (setReleases(null), reset())}
+          onCancel={() => (setReleases(null), cancel())}
         >
           {state.status === 'error' && (
             <p className={styles.acquireError} role="alert">
@@ -105,12 +105,14 @@ export function useEpisodePlay(ctx: EpisodeCtx): EpisodePlay | null {
   const answer = useMemo<EpisodePlay>(
     () => ({
       play(ep: TitleEpisode, src: EpisodeSource) {
-        const { ctx: c, run: go, navigate: nav } = live.current
+        const { ctx: c, run: go, navigate: nav, track: begin } = live.current
         const at = { season: ep.season, episode: ep.number }
         if (src.kind === 'pinned') {
-          playPinned(c.kind, c.tmdbId, c.kind === 'series' ? at.season : undefined, c.kind === 'series' ? at.episode : undefined).then(
-            ({ inputId }) => nav(inputPath(inputId), { state: { title: c.title, poster: c.poster } }),
-            failed,
+          // aborted by another start or the page going away: no player opens
+          const signal = begin()
+          playPinned(c.kind, c.tmdbId, c.kind === 'series' ? at.season : undefined, c.kind === 'series' ? at.episode : undefined, signal).then(
+            ({ inputId }) => !signal.aborted && nav(inputPath(inputId), { state: { title: c.title, poster: c.poster } }),
+            (e: unknown) => !signal.aborted && failed(e),
           )
           return
         }

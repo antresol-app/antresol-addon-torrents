@@ -20,7 +20,7 @@ import { Sources } from './pages/Sources'
 import { SeedingStats } from './stats/SeedingStats'
 import { downloadable, FollowTile, openDownload, TitlePanels, watchableOffLibrary, watchFromTitle } from './titlepage/TitlePanels'
 import { flat, type Key } from './strings'
-import { KeepAction } from './watch/KeepAction'
+import { PlayerActions } from './watch/StatsAction'
 import { useWatchProgress } from './watch/useWatchProgress'
 import { MigratePageRoute } from './migrate/MigratePageRoute'
 import { libraryVideo, openVoiceOverSheet, VoiceOverSheet } from './voices/VoiceOverSheet'
@@ -59,7 +59,7 @@ registerAddon(ID, {
   profileMenu: [{ label: k('follows.mine'), icon: 'eye', to: 'follows', visible: (u) => !u.isAdmin }],
   // «Смотреть сейчас» in the core's input player: the waiting note, «Оставить
   // на сервере» in its top bar, and the download's progress it waits on
-  playerNotes: [{ element: WatchNote, actions: KeepAction, useProgress: useWatchProgress }],
+  playerNotes: [{ element: WatchNote, actions: PlayerActions, useProgress: useWatchProgress }],
   searchBlocks: [{ element: FindAndAddBlock }],
   emptyStateActions: EMPTY_SCOPES.map((scope) => ({
     scope,

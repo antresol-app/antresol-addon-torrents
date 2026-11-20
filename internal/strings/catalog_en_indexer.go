@@ -134,6 +134,8 @@ func init() {
 		"оригинальная дорожка":              "original audio",
 		"раздают: %d":                       "seeders: %d",
 		"любимая озвучка: %s":               "favourite voice-over: %s",
+		"звуковых дорожек: %d":              "audio tracks: %d",
+		"субтитры: %s":                      "subtitles: %s",
 		"переиздание (%d)":                  "reissue (%d)",
 		"видео, не аудиокнига":              "video, not an audiobook",
 		"игра, не аудиокнига":               "game, not an audiobook",

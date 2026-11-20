@@ -66,7 +66,7 @@ func TestManifest(t *testing.T) {
 		Audience string            `json:"audience"`
 	}
 	json.Unmarshal(m.Notify, &topics)
-	if m.ID != "torrents" || m.Version != "0.4.11" || m.Contract != 1 || m.Access != "adults" ||
+	if m.ID != "torrents" || m.Version != "0.4.12" || m.Contract != 1 || m.Access != "adults" ||
 		!slices.Equal(m.Permissions, perms) || !slices.Equal(m.Hooks, hooks) ||
 		len(topics) != 1 || topics[0].Topic != "downloads" || topics[0].Audience != "admins" ||
 		topics[0].Title["ru"] != "Загрузки" || topics[0].Title["en"] != "Downloads" ||
@@ -132,5 +132,31 @@ func TestManifest_NoImportWhileFenced(t *testing.T) {
 	}
 	if slices.Contains(m.Permissions, "imports") {
 		t.Error("permission imports declared while internal/musicimport is fenced")
+	}
+}
+
+// TestManifest_HelperTitle: the FlareSolverr helper has a human title in
+// both languages («Состояние» shows it instead of the service name).
+func TestManifest_HelperTitle(t *testing.T) {
+	raw, err := os.ReadFile("antresol-addon.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m struct {
+		Helpers []struct {
+			Name  string            `json:"name"`
+			Title map[string]string `json:"title"`
+		} `json:"helpers"`
+	}
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Helpers) != 1 || m.Helpers[0].Name != "flaresolverr" {
+		t.Fatalf("helpers %+v", m.Helpers)
+	}
+	for _, lang := range []string{"ru", "en"} {
+		if !strings.Contains(m.Helpers[0].Title[lang], "FlareSolverr") {
+			t.Errorf("title %s: %q", lang, m.Helpers[0].Title[lang])
+		}
 	}
 }

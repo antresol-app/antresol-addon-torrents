@@ -35,6 +35,16 @@ export function canSubmit(c: MigrateConnect, f: ConnectFields): boolean {
   return f.apiKey.trim() !== '' || keepsSecret(c, f)
 }
 
+/**
+ * Why «Подключить» cannot be pressed yet ('' : it can): no address, or no
+ * API key typed or kept (Sonarr, Radarr, Prowlarr).
+ */
+export function blockedBy(c: MigrateConnect, f: ConnectFields): '' | 'url' | 'apiKey' {
+  if (cleanAddress(f.url) === '') return 'url'
+  if (c.kind !== 'login' && f.apiKey.trim() === '' && !keepsSecret(c, f)) return 'apiKey'
+  return ''
+}
+
 /** The body of the connect request: only the fields of the service's kind. */
 export function requestOf(c: MigrateConnect, f: ConnectFields): MigrateConnectRequest {
   const url = f.url.trim()

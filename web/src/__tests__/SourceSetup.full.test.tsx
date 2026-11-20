@@ -85,6 +85,18 @@ describe('SourceSetup', () => {
     expect(calls).toEqual([{ method: 'POST', path: `${X}sonarr/connect`, body: { url: 'http://sonarr:8989', apiKey: 'abc123' } }])
   })
 
+  it('says why «Подключить» waits and that the card is selected only after connecting', async () => {
+    stub(() => json({}))
+    render(<SourceSetup ctx={ctx()} source={sonarr(none)} />)
+    expect(screen.getByText('Чтобы отметить Sonarr, сначала подключите его: введите адрес и нажмите «Подключить».')).toBeInTheDocument()
+    expect(screen.getByText('Введите адрес Sonarr — тогда «Подключить» станет доступна')).toBeInTheDocument()
+    await userEvent.type(screen.getByRole('textbox', { name: 'Адрес' }), 'http://sonarr:8989')
+    expect(screen.getByText(/^Нужен API-ключ: в Sonarr откройте Settings → General → API Key/)).toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText('API-ключ'), 'abc')
+    expect(screen.queryByText(/^Нужен API-ключ/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Подключить' })).toBeEnabled()
+  })
+
   it('shows the server\'s reason and does not reload when the key is not taken', async () => {
     stub(() => json({ error: 'Sonarr не принял API-ключ — скопируйте его в Sonarr: «Settings → General → API Key»' }, 400))
     const c = ctx()

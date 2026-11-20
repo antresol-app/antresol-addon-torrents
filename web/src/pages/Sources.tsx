@@ -11,7 +11,7 @@ import { Link, useNavigate } from "react-router";
 import m from "./Manage.module.css";
 import styles from "./Sources.module.css";
 
-const { Button, ButtonLink, Sheet, TextField } = ui
+const { Button, ButtonLink, SegmentedControl, Sheet, TextField } = ui
 
 export const DEFAULT_PROWLARR_DB = "/prowlarr/prowlarr.db";
 
@@ -282,6 +282,7 @@ export function Sources() {
       )}
       {importing && (
         <ImportSheet
+          apiKept={prowlarr === "api"}
           onClose={() => setImporting(false)}
           onImported={(added) => {
             load(true);
@@ -294,14 +295,22 @@ export function Sources() {
 }
 
 function ImportSheet({
+  apiKept,
   onClose,
   onImported,
 }: {
+  /** «Переезд» keeps a connection to Prowlarr's API: it is offered first. */
+  apiKept: boolean;
   onClose: () => void;
   onImported: (added: Source[]) => void;
 }) {
   const t = useT();
   const [path, setPath] = useState(DEFAULT_PROWLARR_DB);
+  const [via, setVia] = useState<"api" | "file">(apiKept ? "api" : "file");
+  // the link may come after the sheet opened
+  useEffect(() => {
+    if (apiKept) setVia("api");
+  }, [apiKept]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<ImportedSource[] | null>(null);
@@ -310,7 +319,7 @@ function ImportSheet({
     setBusy(true);
     setError("");
     try {
-      const r = await importProwlarr(path.trim());
+      const r = await importProwlarr(via === "api" ? { via } : { via, path: path.trim() });
       setResult(r.imported);
       onImported(r.imported.flatMap((x) => (x.source ? [x.source] : [])));
     } catch (e) {
@@ -343,13 +352,34 @@ function ImportSheet({
               {
                 label: t("sources.prowlarr.import"),
                 kind: "primary",
-                disabled: !path.trim(),
+                disabled: via === "file" && !path.trim(),
                 run: () => void run(),
               },
             ]
       }
     >
-      {!result && (
+      {!result && apiKept && (
+        <div className={styles.importField}>
+          <SegmentedControl
+            label={t("sources.prowlarr.via")}
+            value={via}
+            onChange={setVia}
+            segments={[
+              { value: "api", label: t("sources.prowlarr.viaApi") },
+              { value: "file", label: t("sources.prowlarr.viaFile") },
+            ]}
+          />
+          {via === "api" && (
+            <p className={styles.importHint}>{t("sources.prowlarr.apiHint")}</p>
+          )}
+          {via === "api" && error && (
+            <p className={m.problem} role="alert">
+              {error}
+            </p>
+          )}
+        </div>
+      )}
+      {!result && via === "file" && (
         <div className={styles.importField}>
           <TextField
             label={t("sources.prowlarr.fileLabel")}
@@ -373,6 +403,7 @@ function ImportSheet({
               {added.map((x) => (
                 <li key={x.name}>
                   <Icon name="check" size={14} strokeWidth={2.6} /> {x.name}
+                  {x.hidden?.length ? ` — ${t("sources.prowlarr.hidden", { fields: x.hidden.join(", ") })}` : ""}
                 </li>
               ))}
             </ul>

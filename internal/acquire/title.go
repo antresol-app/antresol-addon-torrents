@@ -1,6 +1,12 @@
 package acquire
 
-import "context"
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"strings"
+	"time"
+)
 
 // TitleInfo is a TMDB title for the «Найти и добавить» page of a title
 // that is not in the library yet.
@@ -101,15 +107,27 @@ func (s *Service) TitleRating(ctx context.Context, kind string, id int) (string,
 }
 
 // StreamStatus is what a viewer waiting for «Смотреть сейчас» sees: how
-// far the torrent is, without paths or names.
+// far the torrent is, and the player's «Статистика» — never a path, a
+// tracker address or a passkey.
 type StreamStatus struct {
 	Status   string `json:"status"`
 	Mode     string `json:"mode"`
 	Size     int64  `json:"size"`
 	Done     int64  `json:"done"`
 	DownRate int64  `json:"downRate"`
-	Peers    int    `json:"peers"`
-	Seeds    int    `json:"seeds"`
+	// UpRate and Uploaded (all-time) bytes given to others; NoUpload: «Не
+	// раздавать» is in force (the engine gives nobody anything).
+	UpRate   int64 `json:"upRate"`
+	Uploaded int64 `json:"uploaded"`
+	NoUpload bool  `json:"noUpload,omitempty"`
+	// Peers and Seeds connected now.
+	Peers int `json:"peers"`
+	Seeds int `json:"seeds"`
+	// Name is the release's title (the source's, else the torrent's own
+	// name); SourceName the display name of the source it came from ("":
+	// unknown — a magnet added by hand, an older row).
+	Name       string `json:"name,omitempty"`
+	SourceName string `json:"sourceName,omitempty"`
 	// BufferHave of BufferWant bytes are downloaded where the player needs
 	// data next (file >= 0 only; BufferWant 0 = unknown).
 	BufferHave int64 `json:"bufferHave"`
@@ -131,11 +149,63 @@ func (s *Service) TorrentStatus(ih string, file int) (StreamStatus, error) {
 		return StreamStatus{}, uerr(ErrNotFound, "Раздача не найдена")
 	}
 	st := h.Status()
-	out := StreamStatus{Status: st.Status, Mode: st.Mode, Size: st.Size, Done: st.Done, DownRate: st.DownRate, Peers: st.Peers, Seeds: st.Seeds, Stalled: st.Stalled}
+	out := StreamStatus{Status: st.Status, Mode: st.Mode, Size: st.Size, Done: st.Done, DownRate: st.DownRate, Peers: st.Peers, Seeds: st.Seeds, Stalled: st.Stalled,
+		UpRate: st.UpRate, Uploaded: st.Uploaded, Name: st.Name}
+	if ns, ok := s.o.Engine.(interface{ NoSeeding() bool }); ok && ns.NoSeeding() {
+		out.NoUpload = true
+	}
+	if r := s.releaseOf(ih); r.title != "" || r.source != "" {
+		if r.title != "" {
+			out.Name = r.title
+		}
+		out.SourceName = r.source
+	}
 	if b, ok := h.(bufferer); ok && file >= 0 {
 		out.BufferHave, out.BufferWant = b.Buffer(file)
 	}
 	return out, nil
+}
+
+// releaseName is a torrent's release as its source named it.
+type releaseName struct{ title, source string }
+
+// releaseOf reads the release a torrent was added from (torrents.
+// release_json: its title and source name only), remembered per torrent —
+// the status is asked every second. Nothing found: zero, not remembered.
+func (s *Service) releaseOf(ih string) releaseName {
+	if v, ok := s.releases.Load(ih); ok {
+		return v.(releaseName)
+	}
+	if s.o.DB == nil {
+		return releaseName{}
+	}
+	ctx, cancel := context.WithTimeout(s.root, 2*time.Second)
+	defer cancel()
+	var raw sql.NullString
+	if err := s.o.DB.QueryRowContext(ctx, `SELECT release_json FROM torrents WHERE lower(infohash)=lower(?)`, ih).Scan(&raw); err != nil || raw.String == "" {
+		return releaseName{}
+	}
+	var r struct {
+		Title      string `json:"title"`
+		SourceName string `json:"sourceName"`
+	}
+	if json.Unmarshal([]byte(raw.String), &r) != nil {
+		return releaseName{}
+	}
+	out := releaseName{title: strings.TrimSpace(r.Title), source: safeSourceName(r.SourceName)}
+	s.releases.Store(ih, out)
+	return out
+}
+
+// safeSourceName is a source's display name; anything that looks like an
+// address (a URL, a host with a path or a query) is dropped — a tracker
+// address may carry a passkey.
+func safeSourceName(n string) string {
+	n = strings.TrimSpace(n)
+	if n == "" || strings.Contains(n, "://") || strings.ContainsAny(n, "/?=&@") {
+		return ""
+	}
+	return n
 }
 
 // SetStreamCacheBytes changes the «Смотреть сейчас» cache limit (settings);

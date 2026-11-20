@@ -66,6 +66,9 @@ type Deps struct {
 	StreamCacheDefaultGB float64
 	// ProwlarrDB: the default path of «Импорт из Prowlarr».
 	ProwlarrDB string
+	// ProwlarrAPI (optional): «Импорт из Prowlarr» over the Prowlarr
+	// connection kept on «Переезд» (migrate.Service).
+	ProwlarrAPI ProwlarrAPI
 	// FlareSolverrServer: the server's ANTRESOL_TORRENTS_FLARESOLVERR_URL
 	// ("" = none), used while no address is saved in the settings.
 	FlareSolverrServer string
@@ -93,6 +96,13 @@ type Deps struct {
 	// /api/admin/migrate and below inside this mux, so the admin check
 	// and the language apply to it too.
 	Migrate http.Handler
+}
+
+// ProwlarrAPI imports Prowlarr's indexers over a kept API connection: ok
+// false when none is kept; a problem the admin can act on is an
+// *indexer.ImportError.
+type ProwlarrAPI interface {
+	ImportProwlarrAPI(ctx context.Context) (res []indexer.Imported, ok bool, err error)
 }
 
 // Routes is the handler of every admin route (paths start with

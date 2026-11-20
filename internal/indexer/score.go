@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -34,6 +35,9 @@ type Wanted struct {
 	// Studios: the favourite voice-over studios, best first — the
 	// series' own studios (SearchRequest.Studios) before Prefs.Studios.
 	Studios []string
+	// SubLangs and Stream: see SearchRequest.
+	SubLangs []string
+	Stream   bool
 }
 
 // Prefs are the user's release preferences (settings key release_prefs).
@@ -178,6 +182,8 @@ func Score(r Result, info release.Info, want Wanted, p Prefs) (int, []string) {
 	switch info.Source {
 	case "Remux", "BluRay", "WEB-DL":
 		score += 5
+	case "BDRip":
+		score += 3 // from the disc, re-encoded: better than a web or TV rip
 	}
 	// a favourite studio wins clearly, but not with 0–1 seeders or below
 	// 720p (a low-quality source without a resolution counts as below)
@@ -190,6 +196,58 @@ func Score(r Result, info release.Info, want Wanted, p Prefs) (int, []string) {
 
 	score, reasons = seedersScore(r, score, reasons)
 	return score, reasons
+}
+
+// The extras of a release beyond its voice-over (extrasScore): every
+// audio track past the first adds trackBonus (at most tracksBonusMax), and
+// subtitles in one of the profile's languages subsBonus. For «Смотреть
+// сейчас» they count fully only from streamSeeders seeders up: an extra
+// track is worth nothing if the release does not start.
+const (
+	trackBonus     = 6
+	tracksBonusMax = 15
+	subsBonus      = 8
+	streamSeeders  = 10
+)
+
+// extrasScore is the bonus of a release's extra audio tracks and of its
+// subtitles in the profile's languages (Wanted.SubLangs), with the reasons.
+func extrasScore(r Result, info release.Info, t tracksInfo, want Wanted) (int, []string) {
+	var reasons []string
+	bonus := 0
+	if t.Tracks > 1 {
+		bonus += min(tracksBonusMax, trackBonus*(t.Tracks-1))
+		reasons = append(reasons, fmt.Sprintf("звуковых дорожек: %d", t.Tracks))
+	}
+	var subs []string
+	for _, l := range want.SubLangs {
+		if slices.Contains(info.Subs, l) && !slices.Contains(subs, l) {
+			subs = append(subs, l)
+		}
+	}
+	if len(subs) > 0 {
+		bonus += subsBonus
+		reasons = append(reasons, fmt.Sprintf("субтитры: %s", strings.Join(subs, ", ")))
+	}
+	if want.Stream && r.Seeders < streamSeeders {
+		bonus = bonus * max(r.Seeders, 0) / streamSeeders
+	}
+	return bonus, reasons
+}
+
+// mergeSubs is the name's subtitle languages with the page's ("sub", a
+// language not named, only when no language is).
+func mergeSubs(name, page []string) []string {
+	out := slices.Clone(name)
+	for _, l := range page {
+		if !slices.Contains(out, l) {
+			out = append(out, l)
+		}
+	}
+	if len(out) > 1 {
+		out = slices.DeleteFunc(out, func(l string) bool { return l == "sub" })
+	}
+	return out
 }
 
 // lowSource: sources that are below 720p when a release names no
@@ -236,10 +294,15 @@ func favouriteStudio(raw string, info release.Info, favourites []string) (int, s
 // each studio once.
 func wantedStudios(lists ...[]string) []string { return release.MergeStudios(lists...) }
 
-// seedersScore adds up to 30 points on a log scale of the seeders.
+// seedersCap: more seeders than this add nothing — 200 start a stream no
+// better than 50, and a busier release must not outrank a better one.
+const seedersCap = 50
+
+// seedersScore adds up to 17 points on a log scale of the seeders,
+// saturating at seedersCap.
 func seedersScore(r Result, score int, reasons []string) (int, []string) {
 	if r.Seeders > 0 {
-		score += min(30, int(math.Round(10*math.Log10(float64(r.Seeders)+1))))
+		score += int(math.Round(10 * math.Log10(float64(min(r.Seeders, seedersCap))+1)))
 		reasons = append(reasons, fmt.Sprintf("раздают: %d", r.Seeders))
 	}
 	return score, reasons

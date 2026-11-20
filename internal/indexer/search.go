@@ -45,6 +45,12 @@ type SearchRequest struct {
 	// Audio category (RuTracker's «Звуковые дорожки и Переводы», 185 and
 	// 809): audio-track releases of the title; scored as Kind.
 	VoiceOvers bool `json:"voiceOvers,omitempty"`
+	// SubLangs: the asking profile's «Языки» (lang codes, best first): a
+	// release with subtitles in one of them scores higher. Stream: the
+	// release is for «Смотреть сейчас» (its extras count only with
+	// enough seeders to start).
+	SubLangs []string `json:"subLangs,omitempty"`
+	Stream   bool     `json:"stream,omitempty"`
 }
 
 // ScoredRelease is a found release with its score.
@@ -70,6 +76,9 @@ type ScoredRelease struct {
 	FormatMismatch bool
 	// topic: what the release page said of its voice-overs (Info has it)
 	topic topicInfo
+	// Tracks: the audio tracks the name and the page named (scored by
+	// extrasScore; 0 = unknown)
+	Tracks tracksInfo
 }
 
 // MarshalJSON uses camelCase names (cardigann.Result has no tags).
@@ -321,7 +330,8 @@ func (m *Manager) Search(ctx context.Context, q SearchRequest) (SearchResponse, 
 // answered (out is in priority order; pending sources are skipped).
 func (m *Manager) assemble(ctx context.Context, q SearchRequest, prefs Prefs, out []found) SearchResponse {
 	want := Wanted{Titles: append([]string{q.Text}, q.AltTitles...), Year: q.Year, Season: q.Season, Episode: q.Episode, Kind: q.Kind,
-		Artist: q.Artist, Work: q.Work, Aliases: q.Aliases, Studios: wantedStudios(q.Studios, prefs.Studios)}
+		Artist: q.Artist, Work: q.Work, Aliases: q.Aliases, Studios: wantedStudios(q.Studios, prefs.Studios),
+		SubLangs: q.SubLangs, Stream: q.Stream}
 	if q.Loose {
 		want.Titles = nil
 	}
@@ -370,6 +380,13 @@ func (m *Manager) assemble(ctx context.Context, q SearchRequest, prefs Prefs, ou
 			c.Lang = releaseLang(c)
 		}
 		c.Score, c.Reasons = Score(c.Result, c.Info, w, prefs)
+		if c.Score != Excluded && !isMediaKind(q.Kind) && !c.Direct {
+			c.Tracks = mergeTracks(parseTracks(c.Title, c.Info), c.topic.Tracks)
+			c.Info.Subs = mergeSubs(c.Info.Subs, c.topic.Subs)
+			bonus, why := extrasScore(c.Result, c.Info, c.Tracks, w)
+			c.Score += bonus
+			c.Reasons = append(c.Reasons, why...)
+		}
 		if q.Kind == "music" {
 			a := release.ParseAudio(c.Title)
 			c.AudioFormat, c.FormatMismatch = a.Label(), MusicFit(a, prefs) == FitNo

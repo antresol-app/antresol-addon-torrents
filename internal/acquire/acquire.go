@@ -225,6 +225,8 @@ type Service struct {
 	// not hold up shutdown (it is redone after the restart).
 	root     context.Context
 	rootStop context.CancelFunc
+	// releases: releaseOf's torrent → its release title and source name
+	releases sync.Map
 	// cacheBytes is the stream cache limit (Options.StreamCacheBytes,
 	// changed live from the settings).
 	cacheBytes atomic.Int64
@@ -285,6 +287,8 @@ type ReleaseRequest struct {
 	Title, Artist   string
 	Year            int      // music: releases of another year are excluded
 	Aliases         []string // music: other names of the album
+	// Langs: the asking profile's «Языки» (subtitles in them rank higher).
+	Langs []string
 }
 
 // AcquireRequest starts watching or downloading a title.
@@ -311,7 +315,10 @@ type AcquireRequest struct {
 	// UserUID is UserID's uid (X-Antresol-User uid); "" = the uid
 	// the core lists for UserID now (a request the core just made).
 	UserUID string `json:"-"`
-	Force   bool   `json:"force,omitempty"` // admin: download even when the disk is full
+	// Langs: the asking profile's «Языки» (the server's pick prefers
+	// subtitles in them). Never from a client.
+	Langs []string `json:"-"`
+	Force bool     `json:"force,omitempty"` // admin: download even when the disk is full
 	// CheckLink: ReleaseLink comes from a profile, not an admin; it is
 	// accepted only if it is a magnet or on a host of SourceID (Download
 	// would fetch any other URL with the source's session). Never from a client.
@@ -588,6 +595,19 @@ func (s *Service) replaceStreams(ctx context.Context, a acquisition, req Acquire
 			s.log.Warn("replace stream", "infohash", ih, "err", err)
 		}
 	}
+}
+
+// abandonStream: the viewer cancelled «Смотреть сейчас» (the request
+// ended) before the player opened. The stream torrent is marked superseded,
+// so it goes a grace later — only if nobody watches it (another viewer's
+// stream of it stays), reads or opens it meanwhile, and only while it is a
+// stream (a saved download is never dropped).
+func (s *Service) abandonStream(h torrent.Handle) {
+	if s.o.Disk == nil || h.Status().Mode != ModeStream {
+		return
+	}
+	s.o.Disk.Supersede(h.InfoHash())
+	s.log.Info("stream cancelled before the player opened", "infohash", h.InfoHash())
 }
 
 // streamViewer is who asks for a stream (the profile's uid, else its id;
@@ -873,7 +893,9 @@ func (s *Service) Releases(ctx context.Context, req ReleaseRequest) (indexer.Sea
 	if err != nil {
 		return indexer.SearchResponse{}, err
 	}
-	return s.search(ctx, s.titleSearch(ctx, req.Kind, req.TMDBID, d, req.Season, req.Episode))
+	sr := s.titleSearch(ctx, req.Kind, req.TMDBID, d, req.Season, req.Episode)
+	sr.SubLangs = req.Langs
+	return s.search(ctx, sr)
 }
 
 // titleSearch is searchRequest of a film or series; a series ranks the
@@ -1091,6 +1113,7 @@ func (s *Service) Acquire(ctx context.Context, req AcquireRequest) (AcquireResul
 			return AcquireResult{}, err
 		}
 		sr = s.titleSearch(ctx, req.Kind, req.TMDBID, d, req.Season, req.Episode)
+		sr.SubLangs, sr.Stream = req.Langs, req.Mode == ModeStream
 		a = acquisition{Kind: req.Kind, TMDBID: req.TMDBID, Title: d.Title, Year: d.Year, Season: req.Season, Episode: req.Episode}
 		tmdbPoster = d.Poster
 	}
@@ -1293,6 +1316,7 @@ func (s *Service) Acquire(ctx context.Context, req AcquireRequest) (AcquireResul
 		cancel()
 		if err != nil {
 			if ctx.Err() != nil {
+				s.abandonStream(h)
 				return AcquireResult{}, ctx.Err()
 			}
 			return AcquireResult{}, wrapErr(ErrNoFiles, "Раздача пока не отвечает — у неё нет участников. Попробуйте другую", err)

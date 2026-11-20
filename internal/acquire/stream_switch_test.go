@@ -2,6 +2,7 @@ package acquire
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -368,4 +369,57 @@ func TestDropStreamDoesNotBlockOthers(t *testing.T) {
 		t.Fatal(err)
 	}
 	<-waited
+}
+
+// cancelledStream asks «Смотреть сейчас» of S01E03 from ih as profile uid
+// and cancels the request while the torrent's file list is awaited (the
+// viewer pressed «Отмена»): Acquire answers the context's error.
+func cancelledStream(t *testing.T, e *env, ih, uid string) {
+	t.Helper()
+	e.idx.resp = indexer.SearchResponse{Releases: []indexer.ScoredRelease{relx("Теория большого взрыва S01", "https://t/"+ih, 1, 5)}}
+	e.eng.nextIH = ih
+	e.eng.nextFiles = []torrent.FileInfo{{Index: 0, Path: "TBBT.S01/TBBT.S01E03.mkv", Size: 800}}
+	ctx, cancel := context.WithCancel(context.Background())
+	e.eng.mu.Lock()
+	e.eng.waitInfo = func(wctx context.Context) error {
+		cancel()
+		<-wctx.Done()
+		return wctx.Err()
+	}
+	e.eng.mu.Unlock()
+	defer func() {
+		e.eng.mu.Lock()
+		e.eng.waitInfo = nil
+		e.eng.mu.Unlock()
+	}()
+	_, err := e.svc.Acquire(ctx, AcquireRequest{TMDBID: 1418, Kind: KindSeries, Season: 1, Episode: 3, Mode: ModeStream, UserID: 1, UserUID: uid})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled stream: %v", err)
+	}
+}
+
+// Cancelled before the player opened: the stream torrent nobody watches
+// goes a grace later, its acquisition with it.
+func TestStreamCancelledBeforePlayerDropsIt(t *testing.T) {
+	shortGrace(t)
+	e := newEnv(t)
+	cancelledStream(t, e, ihSwitchA, "uid-one")
+	if !waitRemoved(e, ihSwitchA) || !e.eng.removedData[ihSwitchA] {
+		t.Fatalf("cancelled stream kept: removed %v", e.eng.removed)
+	}
+	if acquisitionCount(t, e, ihSwitchA) != 0 {
+		t.Fatal("the cancelled stream's acquisition kept")
+	}
+}
+
+// Another viewer watches the same torrent: a cancelled start of it keeps it.
+func TestStreamCancelledKeepsAnotherViewersStream(t *testing.T) {
+	grace := shortGrace(t)
+	e := newEnv(t)
+	streamAs(t, e, ihSwitchA, 3, "uid-two")
+	cancelledStream(t, e, ihSwitchA, "uid-one")
+	time.Sleep(3 * grace)
+	if isRemoved(e, ihSwitchA) {
+		t.Fatal("another viewer's stream was dropped by a cancelled start")
+	}
 }

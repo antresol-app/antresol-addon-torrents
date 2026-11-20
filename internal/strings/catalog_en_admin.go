@@ -15,5 +15,6 @@ func init() {
 		"Внутренняя ошибка сервера": "Internal server error",
 		"Неизвестный формат музыки": "Unknown music format",
 		"Неизвестный битрейт":       "Unknown bitrate",
+		"Подключение к Prowlarr не сохранено: подключите его на странице «Переезд»": "No Prowlarr connection is saved: connect it on the Migrate page",
 	})
 }

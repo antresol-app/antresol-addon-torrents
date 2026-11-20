@@ -40,6 +40,7 @@ func (s *Service) WatchTitle(ctx context.Context, ih, file string) (kind string,
 func (s *Service) SetOnRemoved(fn func(key string)) { s.onRemoved.Store(&fn) }
 
 func (s *Service) removed(key string) {
+	s.releases.Delete(key)
 	if fn := s.onRemoved.Load(); fn != nil {
 		(*fn)(strings.ToLower(key))
 	}

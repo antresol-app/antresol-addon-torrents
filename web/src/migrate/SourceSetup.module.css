@@ -13,7 +13,18 @@
 .submit {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--s-2);
+}
+.why,
+.first {
+  font: var(--t-footnote);
+  color: var(--label-2);
+  text-wrap: pretty;
+}
+.why {
+  flex: 1 1 18ch;
+  min-width: 0;
 }
 .error {
   font: var(--t-footnote);

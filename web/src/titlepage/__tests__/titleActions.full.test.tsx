@@ -132,6 +132,29 @@ describe('«Смотреть сейчас» in the core’s «Смотреть �
     await waitFor(() => expect(acquires(calls)).toEqual([{ tmdbId: 77, kind: 'series', mode: 'stream', season: 1, episode: 1, releaseLink: 'https://t/dune', sourceId: 5 }]))
   })
 
+  it('«Отмена» while the stream is prepared stops it: the request is aborted and no player opens', async () => {
+    let answer: (r: Response) => void = () => undefined
+    const held = new Promise<Response>((r) => (answer = r))
+    const calls = serve(adult, (url, method, body) =>
+      url.endsWith(`${X}acquire`) && method === 'POST' ? (held as unknown as Response) : addon(url, method, body),
+      { title: movie },
+    )
+    await signIn(adult)
+    renderAt('/title/movie/42')
+    await userEvent.click(await screen.findByRole('button', { name: 'Смотреть' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Смотреть сейчас' })
+    await waitFor(() => expect(acquires(calls)).toHaveLength(1))
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Отмена' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Смотреть сейчас' })).not.toBeInTheDocument())
+    const sent = vi.mocked(fetch).mock.calls.find(([u]) => String(u).endsWith(`${X}acquire`))
+    expect((sent?.[1] as RequestInit | undefined)?.signal?.aborted).toBe(true)
+    // the server answers late: nothing follows it
+    answer(json({ infoHash: IH, fileIndex: 0, streamUrl: '', status: 'downloading' }))
+    await new Promise((r) => setTimeout(r, 50))
+    expect(calls.some((c) => c.url.includes(`${X}watch/`))).toBe(false)
+    expect(where()).toHaveTextContent('/title/movie/42')
+  })
+
   it('a kid gets neither the way nor «Скачать»', async () => {
     await open(kid)
     await new Promise((r) => setTimeout(r, 30))

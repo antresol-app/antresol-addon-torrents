@@ -40,6 +40,14 @@ func (e *Engine) SetNoSeeding(on bool) {
 	e.sweepNoSeeding()
 }
 
+// NoSeeding reports whether «Не раздавать» is in force (nothing is
+// uploaded to anyone).
+func (e *Engine) NoSeeding() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.noSeed
+}
+
 // sweepNoSeeding brings every torrent in line with the setting (monitor, every
 // tick, and SetNoSeeding).
 func (e *Engine) sweepNoSeeding() {

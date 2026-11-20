@@ -23,3 +23,4 @@ internal/indexer/score_media.go: (?i)аудиокниг|аудиоспектак
 internal/indexer/score_media.go: и  # stopword of artist names (matching)
 internal/indexer/cardigann/topic.go: %w: %s ответил %d  # technical detail: logs only (a release page that did not answer is skipped)
 internal/indexer/topic.go  # voice-over labels and kinds matched on release pages (parser data, never shown)
+internal/indexer/tracks.go  # audio-track and subtitle language words matched in release names and pages (parser data, never shown)

@@ -2,7 +2,7 @@
 // may be pressed, when a kept key or password may stay blank, and which
 // fields go to the server.
 import { describe, expect, it } from 'vitest'
-import { canSubmit, cleanAddress, keepsSecret, requestOf, type ConnectFields } from '../migrate/connectForm'
+import { blockedBy, canSubmit, cleanAddress, keepsSecret, requestOf, type ConnectFields } from '../migrate/connectForm'
 import type { MigrateConnect } from '../types'
 
 const empty: ConnectFields = { url: '', apiKey: '', username: '', password: '' }
@@ -72,5 +72,17 @@ describe('requestOf', () => {
       url: 'http://sonarr:8989',
       apiKey: '',
     })
+  })
+})
+
+describe('blockedBy', () => {
+  it('says what «Подключить» waits for: the address first, then the key', () => {
+    expect(blockedBy(key(), empty)).toBe('url')
+    expect(blockedBy(key(), { ...empty, url: 'http://sonarr:8989' })).toBe('apiKey')
+    expect(blockedBy(key(), { ...empty, url: 'http://sonarr:8989', apiKey: 'abc' })).toBe('')
+    // a kept key for the same address is enough
+    expect(blockedBy(key({ url: 'http://sonarr:8989', hasSecret: true, connected: true }), { ...empty, url: 'http://sonarr:8989' })).toBe('')
+    // qBittorrent needs the address only
+    expect(blockedBy(login(), { ...empty, url: 'http://qbittorrent:8080' })).toBe('')
   })
 })

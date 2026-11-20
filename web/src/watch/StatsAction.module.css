@@ -1,0 +1,11 @@
+.value {
+  font: var(--t-callout);
+  color: var(--label-2);
+  text-align: right;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.empty {
+  font: var(--t-subhead);
+  color: var(--label-2);
+}

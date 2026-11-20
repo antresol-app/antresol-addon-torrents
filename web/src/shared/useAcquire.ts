@@ -2,7 +2,7 @@
 // album, book, audiobook or manga (no «Смотреть сейчас»: they are only
 // downloaded): one request each; the server picks the release unless the
 // admin chose one in the release table.
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { ApiError } from '@antresol/addon-sdk'
 import { acquire, watchNow } from '../api'
@@ -87,22 +87,50 @@ export const inputPath = (inputId: string) => `/play/input/${encodeURIComponent(
 export function useAcquire() {
   const navigate = useNavigate()
   const [state, setState] = useState<AcquireState>({ status: 'idle' })
+  // the running «Смотреть сейчас» (a stream or a pinned play): Cancel, a
+  // new one, or the caller going away aborts it — the requests stop and the
+  // player never opens. A download is not aborted (it goes on on the server).
+  const playing = useRef<AbortController | null>(null)
+  useEffect(() => () => playing.current?.abort(), [])
+
+  /** A new «Смотреть сейчас»'s signal (the one before it is aborted). */
+  const track = useCallback((): AbortSignal => {
+    playing.current?.abort()
+    const ac = new AbortController()
+    playing.current = ac
+    return ac.signal
+  }, [])
+  /** «Отменить»: the running «Смотреть сейчас» stops; the state is idle again. */
+  const cancel = useCallback(() => {
+    playing.current?.abort()
+    playing.current = null
+    setState({ status: 'idle' })
+  }, [])
 
   /**
    * Resolves true once the server took the request (the download button's
    * ring starts then). `send` asks another endpoint than /api/acquire for
-   * the same answer (a stream from the title's pinned release).
+   * the same answer (a stream from the title's pinned release). A cancelled
+   * stream resolves false and opens nothing.
    */
   const run = useCallback(
-    async (tg: AcquireTarget, mode: 'stream' | 'download', choice?: ReleaseChoice, send: (req: AcquireRequest) => Promise<AcquireResult> = acquire): Promise<boolean> => {
+    async (
+      tg: AcquireTarget,
+      mode: 'stream' | 'download',
+      choice?: ReleaseChoice,
+      send: (req: AcquireRequest, signal?: AbortSignal) => Promise<AcquireResult> = acquire,
+    ): Promise<boolean> => {
       if (isMediaKind(tg.kind)) mode = 'download'
+      const signal = mode === 'stream' ? track() : undefined
       setState({ status: 'busy', mode })
       const req = acquireRequest(tg, mode, choice)
       try {
-        const r = await send(req)
+        const r = await send(req, signal)
+        if (signal?.aborted) return false
         if (mode === 'stream') {
           // «Смотреть сейчас»: the file becomes an input of the core's player
-          const { inputId } = await watchNow(r.infoHash, r.fileIndex)
+          const { inputId } = await watchNow(r.infoHash, r.fileIndex, signal)
+          if (signal?.aborted) return false
           setState({ status: 'idle' })
           navigate(inputPath(inputId), { state: { title: tg.title, poster: tg.poster } })
           return true
@@ -113,12 +141,13 @@ export function useAcquire() {
         })
         return true
       } catch (e) {
+        if (signal?.aborted) return false
         const otherFormat = e instanceof ApiError && e.code === 'no_format' && !choice ? () => void run({ ...tg, anyFormat: true }, mode) : undefined
         setState({ status: 'error', message: e instanceof ApiError ? e.message : t('app.failedTryAgain'), otherFormat })
         return false
       }
     },
-    [navigate],
+    [navigate, track],
   )
 
   /** «Все сезоны на сервер»: one download per season, one after another. */
@@ -146,5 +175,5 @@ export function useAcquire() {
     return true
   }, [])
 
-  return { state, run, runSeasons, reset: () => setState({ status: 'idle' }) }
+  return { state, run, runSeasons, track, cancel, reset: () => setState({ status: 'idle' }) }
 }

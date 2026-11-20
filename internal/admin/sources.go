@@ -201,24 +201,47 @@ func (s *sources) remove(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// POST /api/admin/sources/import-prowlarr {path} (default: Deps.ProwlarrDB,
-// else the mounted Prowlarr config). Errors are the importer's Russian
-// messages.
+// POST /api/admin/sources/import-prowlarr {via, path}: via "api" reads
+// Prowlarr over the connection kept on «Переезд» (Deps.ProwlarrAPI), via
+// "file" (or a path) its prowlarr.db (default: Deps.ProwlarrDB, else the
+// mounted Prowlarr config); neither: the connection when one is kept, else
+// the file. The answer says which was used ("via"). Errors are the
+// importer's Russian messages.
 func (s *sources) importProwlarr(w http.ResponseWriter, r *http.Request) {
 	var in struct {
+		Via  string `json:"via"`
 		Path string `json:"path"`
 	}
 	if r.ContentLength != 0 && !decode(w, r, &in) {
 		return
 	}
 	p := strings.TrimSpace(in.Path)
-	if p == "" {
-		p = s.ProwlarrDB
+	var (
+		res []indexer.Imported
+		err error
+		via = "file"
+	)
+	tried := false
+	if in.Via == "api" || (in.Via == "" && p == "") {
+		if s.ProwlarrAPI != nil {
+			res, tried, err = s.ProwlarrAPI.ImportProwlarrAPI(r.Context())
+		}
+		if tried {
+			via = "api"
+		} else if in.Via == "api" {
+			addonkit.WriteError(w, http.StatusBadRequest, i18n.T(r.Context(), "Подключение к Prowlarr не сохранено: подключите его на странице «Переезд»"))
+			return
+		}
 	}
-	if p == "" {
-		p = DefaultProwlarrDB
+	if !tried {
+		if p == "" {
+			p = s.ProwlarrDB
+		}
+		if p == "" {
+			p = DefaultProwlarrDB
+		}
+		res, err = s.Sources.ImportProwlarr(r.Context(), p)
 	}
-	res, err := s.Sources.ImportProwlarr(r.Context(), p)
 	if err != nil {
 		if r.Context().Err() != nil {
 			return
@@ -241,5 +264,5 @@ func (s *sources) importProwlarr(w http.ResponseWriter, r *http.Request) {
 		}
 		res[i].Reason = i18n.Localize(r.Context(), res[i].Reason)
 	}
-	addonkit.WriteJSON(w, http.StatusOK, map[string]any{"imported": res})
+	addonkit.WriteJSON(w, http.StatusOK, map[string]any{"imported": res, "via": via})
 }

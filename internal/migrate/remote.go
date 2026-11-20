@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/i18n"
+	"github.com/antresol-app/antresol-addon-torrents/internal/indexer"
 )
 
 // Remote is how to reach an old service over the network when its files
@@ -44,9 +45,9 @@ type RemoteView struct {
 	Connected bool   `json:"connected"`
 }
 
-// remotes keeps the connections in memory only, for this run of the addon:
-// they are never written to disk, logged or answered; a restart forgets
-// them (enter them again).
+// remotes keeps the connections for the migration; they are sealed into
+// the addon's settings (remote_store.go) and so survive a restart and an
+// addon update; they are never logged or answered.
 type remotes struct {
 	mu  sync.RWMutex
 	m   map[string]Remote
@@ -118,8 +119,8 @@ func (s *Service) Remote(id string) (RemoteView, bool) {
 }
 
 // How Prowlarr's tracker list is reached (ProwlarrLink): its prowlarr.db
-// mounted under /import, a connection over its API kept for this run of
-// the addon, or neither.
+// mounted under /import, a connection over its API kept (Connect), or
+// neither.
 const (
 	ProwlarrFile = "file"
 	ProwlarrAPI  = "api"
@@ -141,6 +142,27 @@ func (s *Service) ProwlarrLink() string {
 		return ProwlarrAPI
 	}
 	return ProwlarrNone
+}
+
+// ImportProwlarrAPI is «Источники» → «Импортировать из Prowlarr» over the
+// Prowlarr connection kept on «Переезд» (Connect): its indexers are read
+// over the API and added as the file import adds them. ok false: no
+// connection is kept (the file is used). A connection problem is an
+// *indexer.ImportError (its Russian message, never the key).
+func (s *Service) ImportProwlarrAPI(ctx context.Context) (res []indexer.Imported, ok bool, err error) {
+	if s == nil || s.remotes == nil {
+		return nil, false, nil
+	}
+	r, kept := s.remotes.get(SourceProwlarr)
+	if !kept || s.Indexer == nil {
+		return nil, false, nil
+	}
+	res, err = prowlarrOverAPI(ctx, ArrOptions{ProwlarrAPI: &r, HTTP: s.HTTP}, s.Indexer)
+	var re *RemoteError
+	if errors.As(err, &re) {
+		return nil, true, &indexer.ImportError{Msg: re.Msg}
+	}
+	return res, true, err
 }
 
 // Connect checks r against the service id (its address answers, the key
@@ -175,6 +197,7 @@ func (s *Service) Connect(ctx context.Context, id string, r Remote) (string, err
 		return "", err
 	}
 	s.remotes.set(id, r)
+	s.persistRemotes()
 	s.cache.forget()
 	return detail, nil
 }
@@ -189,6 +212,7 @@ func (s *Service) Forget(id string) error {
 		return ErrBusy
 	}
 	s.remotes.forget(id)
+	s.persistRemotes()
 	s.cache.forget()
 	return nil
 }

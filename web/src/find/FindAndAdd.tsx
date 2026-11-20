@@ -202,7 +202,7 @@ export function FindAndAdd({ text, q, scope, nothing, admin, kind }: { text: str
  */
 function CandidateRow({ c, admin }: { c: Candidate; admin: boolean }) {
   const t = useT()
-  const { state, run, reset } = useAcquire()
+  const { state, run, reset, cancel } = useAcquire()
   const [sheet, setSheet] = useState<'stream' | 'download' | null>(null)
   // «Выбрать другую раздачу…»: the picked download replaces the running one
   const [replacing, setReplacing] = useState(false)
@@ -269,7 +269,14 @@ function CandidateRow({ c, admin }: { c: Candidate; admin: boolean }) {
             </>
           )}
         </div>
-        {busy === 'stream' && <p className={styles.note}>{t('search.preparing')}</p>}
+        {busy === 'stream' && (
+          <p className={styles.note}>
+            {t('search.preparing')}{' '}
+            <Button variant="link" size="small" onClick={cancel}>
+              {t('common.cancel')}
+            </Button>
+          </p>
+        )}
         {!series && progress.state.kind === 'active' && busy !== 'download' && (
           <StalledNote stalled={progress.state.stalled} hint={progress.state.hint} onReplace={() => openSheet('download', true)} />
         )}

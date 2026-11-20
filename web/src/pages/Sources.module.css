@@ -15,6 +15,12 @@
   width: 100%;
   margin-top: var(--s-4);
 }
+.importHint {
+  margin-top: var(--s-2h);
+  color: var(--label-2);
+  font: var(--t-footnote);
+  text-wrap: pretty;
+}
 .importResult {
   width: 100%;
   margin-top: var(--s-3);

@@ -38,8 +38,16 @@ type fakeHandle struct {
 	selection []int
 }
 
-func (h *fakeHandle) InfoHash() string                   { return h.ih }
-func (h *fakeHandle) WaitInfo(ctx context.Context) error { return nil }
+func (h *fakeHandle) InfoHash() string { return h.ih }
+func (h *fakeHandle) WaitInfo(ctx context.Context) error {
+	h.e.mu.Lock()
+	f := h.e.waitInfo
+	h.e.mu.Unlock()
+	if f == nil {
+		return nil
+	}
+	return f(ctx)
+}
 func (h *fakeHandle) Files() []torrent.FileInfo {
 	out := make([]torrent.FileInfo, len(h.files))
 	for i, f := range h.files {
@@ -78,11 +86,12 @@ type fakeEngine struct {
 	beforeRm    func(e *fakeEngine, ih string) // runs inside RemoveIfMode before the check
 	offline     string                         // Offline(): why the media disk is held
 	fetchInfo   func(ctx context.Context, magnet string) ([]byte, error)
-	fetches     int             // FetchInfo calls
-	grown       [][]int         // AddFiles calls
-	addErr      error           // what adding a torrent the engine lacks fails with
-	shrunk      [][]int         // RemoveFiles calls
-	mayEmpty    map[string]bool // RemoveFiles: what the caller let empty, by path
+	fetches     int                             // FetchInfo calls
+	grown       [][]int                         // AddFiles calls
+	addErr      error                           // what adding a torrent the engine lacks fails with
+	shrunk      [][]int                         // RemoveFiles calls
+	mayEmpty    map[string]bool                 // RemoveFiles: what the caller let empty, by path
+	waitInfo    func(ctx context.Context) error // WaitInfo of every handle (nil: the info is there)
 }
 
 func (e *fakeEngine) FetchInfo(ctx context.Context, magnet string) ([]byte, error) {

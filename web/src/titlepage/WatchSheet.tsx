@@ -35,7 +35,7 @@ export function WatchSheet({ kind, tmdbId, title, poster, year, onClose }: Watch
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const series = kind === 'series'
-  const { state, run, reset } = useAcquire()
+  const { state, run, reset, track, cancel } = useAcquire()
   const pinned = usePinned(kind, tmdbId)
   const [pinBusy, setPinBusy] = useState(false)
   const [pinError, setPinError] = useState('')
@@ -64,9 +64,11 @@ export function WatchSheet({ kind, tmdbId, title, poster, year, onClose }: Watch
     setPinError('')
     if (!pinned.pin) return void run(target, 'stream')
     setPinBusy(true)
-    playPinned(kind, tmdbId, series ? current : undefined, series ? ep : undefined).then(
-      ({ inputId }) => navigate(inputPath(inputId), { state: { title, poster } }),
+    const signal = track()
+    playPinned(kind, tmdbId, series ? current : undefined, series ? ep : undefined, signal).then(
+      ({ inputId }) => !signal.aborted && navigate(inputPath(inputId), { state: { title, poster } }),
       (e: unknown) => {
+        if (signal.aborted) return
         setPinBusy(false)
         setPinError(e instanceof ApiError ? e.message : t('app.failedTryAgain'))
       },
@@ -80,6 +82,12 @@ export function WatchSheet({ kind, tmdbId, title, poster, year, onClose }: Watch
     watch()
   })
 
+  // Cancel (or the sheet dismissed): the running start stops, no player opens
+  const close = () => {
+    cancel()
+    setPinBusy(false)
+    onClose()
+  }
   const busy = state.status === 'busy' || pinBusy
   const error = pinError || (state.status === 'error' ? state.message : '')
   if (releases) {
@@ -90,7 +98,7 @@ export function WatchSheet({ kind, tmdbId, title, poster, year, onClose }: Watch
         role="dialog"
         size="large"
         dismissOnOutside
-        onCancel={onClose}
+        onCancel={close}
       >
         {error && (
           <p className={styles.acquireError} role="alert">
@@ -120,9 +128,9 @@ export function WatchSheet({ kind, tmdbId, title, poster, year, onClose }: Watch
       message={busy ? t('item.preparing') : undefined}
       role="dialog"
       busy={busy}
-      onCancel={onClose}
+      onCancel={close}
       actions={[
-        { label: t('common.cancel'), kind: 'cancel', run: onClose },
+        { label: t('common.cancel'), kind: 'cancel', run: close },
         { label: t('item.pickReleaseWatch'), run: () => (reset(), setReleases(true)) },
         ...(series ? [{ label: t('comp.action.watch'), kind: 'primary' as const, disabled: !seasons, run: watch }] : []),
       ]}

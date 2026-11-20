@@ -34,6 +34,7 @@ func (h *handlers) acquire(w http.ResponseWriter, r *http.Request) {
 	}
 	u := user(r)
 	req.UserID, req.UserUID = u.ID, u.UID
+	req.Langs = h.myLanguages(r)
 	req.Force = req.Force && u.IsAdmin // only an admin may download onto a full disk
 	if !u.IsAdmin {
 		req.Files = nil

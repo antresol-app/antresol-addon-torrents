@@ -84,8 +84,12 @@ export const updateSource = (id: number, patch: { name?: string; enabled?: boole
   api.patch<Source>(`admin/sources/${id}`, patch)
 export const testSource = (id: number) => api.post<Source>(`admin/sources/${id}/test`)
 export const deleteSource = (id: number) => api.del<void>(`admin/sources/${id}`)
-export const importProwlarr = (path: string) =>
-  api.post<{ imported: ImportedSource[] }>('admin/sources/import-prowlarr', path ? { path } : {})
+/** «Импортировать из Prowlarr»: via 'api' over «Переезд»'s kept connection, via 'file' its prowlarr.db (path, else the default). */
+export const importProwlarr = (req: { via?: 'api' | 'file'; path?: string } = {}) =>
+  api.post<{ imported: ImportedSource[]; via?: 'api' | 'file' }>('admin/sources/import-prowlarr', {
+    ...(req.via ? { via: req.via } : {}),
+    ...(req.path ? { path: req.path } : {}),
+  })
 
 export const getSettings = (signal?: AbortSignal) => api.get<AdminSettings>('admin/settings', signal)
 /** What a settings PUT carries: not «Не раздавать» (saveNoSeeding writes it) and not what only the server reports. */
@@ -148,7 +152,7 @@ export async function streamReleases(rq: ReleasesQuery, onProgress: (p: ReleaseP
 }
 
 /** «Смотреть сейчас» / «На сервер»: the server picks the release unless the request names one. */
-export const acquire = (req: AcquireRequest) => api.post<AcquireResult>('acquire', req)
+export const acquire = (req: AcquireRequest, signal?: AbortSignal) => api.post<AcquireResult>('acquire', req, signal)
 /** A title's download progress for the download button's ring; null (204) when nothing is downloading. */
 export const getTitleProgress = async (tq: { kind: string; tmdbId: number; season?: number }, signal?: AbortSignal): Promise<TitleProgress | null> =>
   (await api.get<TitleProgress | undefined>(`acquire/progress${qs({ ...tq })}`, signal)) ?? null
@@ -221,7 +225,7 @@ export const promote = (infoHash: string) => api.post<PromoteResult>(`torrents/$
 export const getTorrentStatus = (infoHash: string, signal?: AbortSignal, fileIndex?: number) =>
   api.get<StreamStatus>(`torrents/${ih(infoHash)}/status${fileIndex !== undefined ? `?file=${fileIndex}` : ''}`, signal)
 /** «Смотреть сейчас»: file `idx` of the download becomes an input of the core's player (/play/input/<inputId>). */
-export const watchNow = (infoHash: string, idx: number) => api.post<{ inputId: string }>(`watch/${ih(infoHash)}/${idx}`)
+export const watchNow = (infoHash: string, idx: number, signal?: AbortSignal) => api.post<{ inputId: string }>(`watch/${ih(infoHash)}/${idx}`, undefined, signal)
 
 /** The seeding block of «Статистика» (admins). */
 export interface SeedingStats {
@@ -295,8 +299,8 @@ export const refreshPin = (kind: PinKind, tmdbId: number) => api.post<{ pin: Pin
 export const acceptPinSuggestion = (kind: PinKind, tmdbId: number) =>
   api.post<{ pin: Pin }>(`${pinPath(kind, tmdbId)}/accept-suggestion`).then((x) => x.pin)
 /** «Смотреть» an episode (a film: none) from the pin: the file becomes an input of the core's player (/play/input/<inputId>). */
-export const playPinned = (kind: PinKind, tmdbId: number, season?: number, episode?: number) =>
-  api.post<{ inputId: string }>(`${pinPath(kind, tmdbId)}/play`, kind === 'series' ? { season, episode } : {})
+export const playPinned = (kind: PinKind, tmdbId: number, season?: number, episode?: number, signal?: AbortSignal) =>
+  api.post<{ inputId: string }>(`${pinPath(kind, tmdbId)}/play`, kind === 'series' ? { season, episode } : {}, signal)
 /** «Скачать серию»: episodes of the pin download to the server (409: none of them in the pin). */
 export const downloadPinnedEpisodes = (kind: PinKind, tmdbId: number, season: number, episodes: number[]) =>
   api.post<AcquireResult>(`${pinPath(kind, tmdbId)}/download`, { season, episodes })

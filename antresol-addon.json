@@ -8,7 +8,7 @@
     "ru": "Поиск и загрузка раздач, источники, торрент-движок",
     "en": "Searching and downloading releases, sources, the torrent engine"
   },
-  "version": "0.4.11",
+  "version": "0.4.12",
   "author": "Antresol",
   "homepage": "",
   "contract": 1,
@@ -17,6 +17,10 @@
   "helpers": [
     {
       "name": "flaresolverr",
+      "title": {
+        "ru": "FlareSolverr — обход защиты Cloudflare",
+        "en": "FlareSolverr — Cloudflare bypass"
+      },
       "image": "ghcr.io/flaresolverr/flaresolverr:v3.5.2",
       "port": 8191,
       "health": "/"

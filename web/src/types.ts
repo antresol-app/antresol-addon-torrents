@@ -163,6 +163,9 @@ export interface ImportedSource {
   definitionId?: string
   source?: Source
   reason?: string
+  /** Settings Prowlarr's API did not give (passwords): to type in. */
+  hidden?: string[]
+  needsFlareSolverr?: boolean
 }
 
 export type LangCode = 'ru' | 'en' | 'uk' | 'de' | 'fr' | 'es' | 'it' | 'pt' | 'pl' | 'ja' | 'zh' | 'ko'
@@ -410,8 +413,16 @@ export interface StreamStatus {
   size: number
   done: number
   downRate: number
+  /** Bytes/s and all-time bytes given to others; noUpload: «Не раздавать» is on. */
+  upRate?: number
+  uploaded?: number
+  noUpload?: boolean
+  /** Connected now. */
   peers: number
   seeds: number
+  /** The release's title and its source's display name (never an address). */
+  name?: string
+  sourceName?: string
   /** Downloaded of needed bytes where the player reads next (?file=; 0 = unknown). */
   bufferHave?: number
   bufferWant?: number

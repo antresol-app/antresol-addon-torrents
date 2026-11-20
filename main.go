@@ -232,7 +232,7 @@ func main() {
 			adminAPI.set(admin.Routes(admin.Deps{
 				Acquire: svc.Acq, Sources: svc.Sources, Settings: svc.Settings, NoSeed: svc.NoSeed,
 				Upload: svc.Engine, StreamCacheDefaultGB: float64(conf.StreamCacheBytes) / (1 << 30),
-				ProwlarrDB: conf.ProwlarrDB, FlareSolverrServer: conf.FlareSolverr, FlareSolverrHelper: solver, Outside: pusher.LastOutside,
+				ProwlarrDB: conf.ProwlarrDB, ProwlarrAPI: svc.Migrate, FlareSolverrServer: conf.FlareSolverr, FlareSolverrHelper: solver, Outside: pusher.LastOutside,
 				Watched: core.Watched, Languages: profiles.Languages, AcquireFiles: files, Stats: stats,
 				Migrate: migrateapi.Routes(migrateapi.Deps{Migrate: svc.Migrate}),
 			}))

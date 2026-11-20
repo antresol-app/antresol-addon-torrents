@@ -119,7 +119,7 @@ type Service struct {
 	// It is read at each call.
 	HoldsChanged func()
 
-	remotes *remotes // the connections typed on the page (Connect), memory only
+	remotes *remotes // the connections typed on the page (Connect), saved in the settings
 }
 
 // New registers the addon's sources and leftovers on r and returns the
@@ -128,6 +128,12 @@ func New(r *Runner, s Service) *Service {
 	s.Runner = r
 	s.remotes = &remotes{}
 	svc := &s
+	// the connections typed before a restart or an addon update
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	if err := svc.loadRemotes(ctx); err != nil && r.Log != nil {
+		r.Log.Warn("migrate: the saved connections were not read", "err", err)
+	}
+	cancel()
 	r.Register(&arrSource{s: svc, id: SourceProwlarr, name: "Prowlarr", order: 10, path: s.Paths.Prowlarr})
 	r.Register(&arrSource{s: svc, id: SourceSonarr, name: "Sonarr", order: 20, path: s.Paths.Sonarr})
 	r.Register(&arrSource{s: svc, id: SourceRadarr, name: "Radarr", order: 30, path: s.Paths.Radarr})

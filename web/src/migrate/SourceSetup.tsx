@@ -2,7 +2,7 @@
 // over the network instead (MigrateFullApi.SourceSetup). Sonarr, Radarr and
 // Prowlarr ask for an address and an API key, qBittorrent for an address,
 // a login and a password. «Подключить» checks them on the server, which
-// keeps them in memory for the migration and counts what it found; the
+// keeps them (sealed in the addon's settings: a restart keeps them too) and counts what it found; the
 // card then counts as found and the usual preview and run follow. A card
 // with its files mounted draws nothing. The key and the password are never
 // answered back: a kept one shows as «Сохранён», and a blank field keeps it.
@@ -11,7 +11,7 @@ import { ApiError, ui, type MigrateFullApi } from '@antresol/addon-sdk'
 import { migrateConnect, migrateForget } from '../api'
 import { tr, useT } from '../i18n'
 import type { MigrateConnect } from '../types'
-import { canSubmit, keepsSecret, requestOf } from './connectForm'
+import { blockedBy, canSubmit, keepsSecret, requestOf } from './connectForm'
 import s from './SourceSetup.module.css'
 
 const { Button, TextField } = ui
@@ -101,8 +101,12 @@ export function SourceSetup({ ctx, source }: SetupProps) {
   }
 
   const keptHint = kept ? t('migrate.connect.kept') : undefined
+  // why «Подключить» waits: said under it, not left a mystery
+  const blocked = blockedBy(connect, fields)
+  const why = blocked === 'url' ? t('migrate.connect.needUrl', { name: source.name }) : blocked === 'apiKey' ? t('migrate.connect.needKey', { name: source.name }) : ''
   return (
     <form className={s.form} onSubmit={(e) => void submit(e)} data-testid="migrate-connect" aria-label={source.name}>
+      {!source.found && !connect.connected && <p className={s.first}>{t('migrate.connect.first', { name: source.name })}</p>}
       <TextField
         label={t('migrate.connect.url')}
         type="url"
@@ -158,6 +162,7 @@ export function SourceSetup({ ctx, source }: SetupProps) {
         <Button type="submit" size="small" loading={busy} disabled={locked || !canSubmit(connect, fields)}>
           {t('migrate.connect.submit')}
         </Button>
+        {why && !locked && <span className={s.why}>{why}</span>}
         {editing && (
           <Button size="small" variant="secondary" disabled={busy} onClick={() => setEditing(false)}>
             {t('common.cancel')}
