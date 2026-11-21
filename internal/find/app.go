@@ -410,8 +410,9 @@ func (h *appHandlers) qualityStep(w http.ResponseWriter, r *http.Request, season
 
 func (h *appHandlers) releaseStep(w http.ResponseWriter, r *http.Request, in appCall, season, episode int, quality string) {
 	mine := h.myLanguages(r)
-	resp, err := h.Acquire.Releases(r.Context(), acquire.ReleaseRequest{TMDBID: in.TMDBID, Kind: in.Kind,
-		Season: season, Episode: episode, Langs: mine}, nil)
+	// a list for a phone's step: the slow sources are not waited for
+	resp, err := h.Acquire.Releases(indexer.WithSettle(r.Context(), indexer.SettleGrace, indexer.SettleCap),
+		acquire.ReleaseRequest{TMDBID: in.TMDBID, Kind: in.Kind, Season: season, Episode: episode, Langs: mine}, nil)
 	if err != nil {
 		acquireErr(w, r, "app releases", err)
 		return
@@ -619,7 +620,13 @@ func (h *appHandlers) runWatch(w http.ResponseWriter, r *http.Request, in appCal
 			return
 		}
 	}
-	res, err := h.acquireAs(ctx, u, h.myLanguages(r), acquire.AcquireRequest{TMDBID: in.TMDBID, Kind: in.Kind,
+	actx := ctx
+	if link == "" {
+		// the server's pick: it starts with the best release of the sources
+		// that answered first, not after the slowest one
+		actx = indexer.WithSettle(ctx, indexer.SettleGrace, indexer.SettleCap)
+	}
+	res, err := h.acquireAs(actx, u, h.myLanguages(r), acquire.AcquireRequest{TMDBID: in.TMDBID, Kind: in.Kind,
 		Season: season, Episode: episode, Mode: acquire.ModeStream, ReleaseLink: link, SourceID: src})
 	if err != nil {
 		acquireErr(w, r, "app watch", err)

@@ -39,8 +39,11 @@ type fakeAcq struct {
 	gate    chan struct{}
 	relResp indexer.SearchResponse
 	relErr  error
-	files   acquire.ReleaseFiles
-	list    []acquire.TorrentView
+	// relSettling: whether each release list asked its search not to wait
+	// for the slow sources (indexer.WithSettle)
+	relSettling []bool
+	files       acquire.ReleaseFiles
+	list        []acquire.TorrentView
 }
 
 func (f *fakeAcq) Discover(ctx context.Context, q string) ([]acquire.Candidate, error) {
@@ -58,6 +61,9 @@ func (f *fakeAcq) DiscoverMedia(_ context.Context, kind, q string) ([]acquire.Ca
 }
 
 func (f *fakeAcq) Releases(ctx context.Context, req acquire.ReleaseRequest, progress func(indexer.Progress)) (indexer.SearchResponse, error) {
+	f.mu.Lock()
+	f.relSettling = append(f.relSettling, indexer.Settling(ctx))
+	f.mu.Unlock()
 	if progress != nil {
 		for _, p := range f.steps {
 			progress(p)
@@ -311,6 +317,21 @@ func TestReleases_Errors(t *testing.T) {
 	e.acq.relResp = indexer.SearchResponse{Releases: []indexer.ScoredRelease{rel("a", "ja", "en")}}
 	if w := do(e.api, "GET", "/api/releases?tmdbId=1&kind=movie", adultU, ""); w.Code != 200 || !strings.Contains(w.Body.String(), `"subs":["en"]`) {
 		t.Fatalf("plain: %d %s", w.Code, w.Body)
+	}
+}
+
+// The web page's lists, streamed and plain, wait for every source: only the
+// app's lists and starts settle.
+func TestReleasesWebWaits(t *testing.T) {
+	e := newEnv(t)
+	e.acq.relResp = indexer.SearchResponse{Releases: []indexer.ScoredRelease{rel("a", "en")}}
+	for _, path := range []string{"/api/releases?tmdbId=1&kind=movie", "/api/releases?tmdbId=1&kind=movie&stream=1"} {
+		if w := do(e.api, "GET", path, adultU, ""); w.Code != 200 {
+			t.Fatalf("%s: %d %s", path, w.Code, w.Body)
+		}
+	}
+	if got := e.acq.relSettling; len(got) != 2 || got[0] || got[1] {
+		t.Fatalf("web lists settle: %v", got)
 	}
 }
 

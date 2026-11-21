@@ -22,6 +22,9 @@ type appAcq struct {
 	*fakeAcq
 	relReqs []acquire.ReleaseRequest
 	started acquire.AcquireResult
+	// acqSettling: whether each start asked its search not to wait for the
+	// slow sources (indexer.WithSettle)
+	acqSettling []bool
 }
 
 func (a *appAcq) Releases(ctx context.Context, req acquire.ReleaseRequest, progress func(indexer.Progress)) (indexer.SearchResponse, error) {
@@ -32,6 +35,9 @@ func (a *appAcq) Releases(ctx context.Context, req acquire.ReleaseRequest, progr
 }
 
 func (a *appAcq) Acquire(ctx context.Context, req acquire.AcquireRequest) (acquire.AcquireResult, error) {
+	a.mu.Lock()
+	a.acqSettling = append(a.acqSettling, indexer.Settling(ctx))
+	a.mu.Unlock()
 	res, err := a.fakeAcq.Acquire(ctx, req)
 	if err == nil && a.started.InfoHash != "" {
 		res = a.started
@@ -354,6 +360,30 @@ func TestApp_Step_ReleaseRows(t *testing.T) {
 	w := e.post("/api/app/run", refBody("watch", "movie", 3, s.Rows[1].Ref, ""))
 	if w.Code != 200 || len(e.acq.acquired) != 1 || e.acq.acquired[0].ReleaseLink != "http://t/p.torrent" || e.acq.acquired[0].SourceID != 4 {
 		t.Fatalf("run of row 1: %d %s %+v", w.Code, w.Body, e.acq.acquired)
+	}
+}
+
+// The app's release list and the server's pick do not wait for the slow
+// sources; a release chosen by hand searches nothing (the web page's list
+// keeps waiting for them: TestReleasesWebWaits in find_test.go).
+func TestApp_SearchesSettle(t *testing.T) {
+	e := newAppEnv(t)
+	e.acq.started = acquire.AcquireResult{InfoHash: "ab"}
+	e.step(t, `{"way":"watch","kind":"movie","tmdbId":3}`)
+	q := e.step(t, `{"way":"keep","kind":"movie","tmdbId":3}`) // the quality first: no search yet
+	e.step(t, refBody("keep", "movie", 3, q.Rows[2].Ref, ""))
+	if got := e.acq.relSettling; len(got) != 2 || !got[0] || !got[1] {
+		t.Fatalf("release lists settle: %v, want both", got)
+	}
+	if w := e.post("/api/app/run", `{"way":"watch","kind":"movie","tmdbId":3,"quick":true}`); w.Code != 200 {
+		t.Fatalf("quick: %d %s", w.Code, w.Body)
+	}
+	ref := appRef{K: refRelease, L: "magnet:?xt=urn:btih:cc", Src: 4}.encode()
+	if w := e.post("/api/app/run", refBody("watch", "movie", 3, ref, "")); w.Code != 200 {
+		t.Fatalf("chosen: %d %s", w.Code, w.Body)
+	}
+	if got := e.acq.acqSettling; len(got) != 2 || !got[0] || got[1] {
+		t.Fatalf("starts settle: %v, want the server's pick only", got)
 	}
 }
 

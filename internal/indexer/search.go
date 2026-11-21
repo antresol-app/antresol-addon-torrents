@@ -168,6 +168,37 @@ func WithProgress(ctx context.Context, f func(Progress)) context.Context {
 	return context.WithValue(ctx, progressKey{}, f)
 }
 
+// SettleGrace and SettleCap are what WithSettle callers pass: how long
+// after the first usable release a search still waits for the other
+// sources, and the most it waits once it has one.
+const (
+	SettleGrace = 2 * time.Second
+	SettleCap   = 6 * time.Second
+)
+
+type settleKey struct{}
+
+type settleOpts struct{ grace, limit time.Duration }
+
+// WithSettle makes Search return early, for a start that must not wait for
+// the slowest source («Смотреть сейчас» takes the best release there is).
+// The search waits for the first usable release (an acceptable one: not
+// excluded by its score); then it returns grace later, or limit after the
+// search began, or when every source has answered, whichever comes first.
+// The sources still pending are cancelled and reported in Failed as not
+// answering (no status of theirs changes). Without a usable release the
+// search waits for the sources as usual, so a title only a slow source has
+// is still found. WithProgress still reports the sources up to that point.
+func WithSettle(ctx context.Context, grace, limit time.Duration) context.Context {
+	return context.WithValue(ctx, settleKey{}, settleOpts{grace: grace, limit: limit})
+}
+
+// Settling reports whether ctx was made by WithSettle.
+func Settling(ctx context.Context) bool {
+	_, ok := ctx.Value(settleKey{}).(settleOpts)
+	return ok
+}
+
 // found is one source's answer to a search (done: it answered).
 type found struct {
 	src     Source
@@ -226,7 +257,16 @@ func (m *Manager) Search(ctx context.Context, q SearchRequest) (SearchResponse, 
 	}
 
 	progress, _ := ctx.Value(progressKey{}).(func(Progress))
-	var mu sync.Mutex // out and left
+	settle, settling := ctx.Value(settleKey{}).(settleOpts)
+	// srcCtx is what the sources run under: a settling search cancels it
+	// to drop the slow ones
+	srcCtx, cancelSources := ctx, func() {}
+	if settling {
+		srcCtx, cancelSources = context.WithCancel(ctx)
+	}
+	defer cancelSources()
+	var mu sync.Mutex // out, left and settled
+	settled := false  // the search returned without the pending sources: they write nothing
 	out := make([]found, len(sources))
 	for i, s := range sources {
 		out[i].src = s
@@ -275,6 +315,8 @@ func (m *Manager) Search(ctx context.Context, q SearchRequest) (SearchResponse, 
 		}
 		snaps <- slices.Clone(out)
 	}
+	usable := make(chan struct{}) // settling: closed by the first source with an acceptable release
+	var usableOnce sync.Once
 	var wg sync.WaitGroup
 	for i, s := range sources {
 		wg.Add(1)
@@ -282,7 +324,7 @@ func (m *Manager) Search(ctx context.Context, q SearchRequest) (SearchResponse, 
 			defer wg.Done()
 			var f found
 			if isOPDS(s) {
-				res, tags, err := m.searchOPDS(ctx, s, q, queries)
+				res, tags, err := m.searchOPDS(srcCtx, s, q, queries)
 				f = found{s, res, err, true, tags, true, nil}
 			} else {
 				var res []Result
@@ -290,32 +332,57 @@ func (m *Manager) Search(ctx context.Context, q SearchRequest) (SearchResponse, 
 				if m.isResting(s.ID) {
 					err = cardigann.ErrLoginFailed // not asked: no login attempt the tracker sees
 				} else {
-					res, err = m.searchSource(ctx, s, q, queries)
+					res, err = m.searchSource(srcCtx, s, q, queries)
 				}
 				f = found{s, res, err, m.directDef(s), nil, true, nil}
-				if b, ok := backup[s.ID]; ok && err != nil && ctx.Err() == nil && !m.isResting(b.ID) {
+				if b, ok := backup[s.ID]; ok && err != nil && srcCtx.Err() == nil && !m.isResting(b.ID) {
 					// the second way in, only now: the tracker is asked
 					// once per search, not twice
-					if res, berr := m.searchSource(ctx, b, q, queries); berr == nil {
+					if res, berr := m.searchSource(srcCtx, b, q, queries); berr == nil {
 						m.log.Info("indexer: answered through the backup source", "source", s.Name, "backup", b.Name)
 						b.Name = s.Name // one tracker to the user; downloads go through b
 						f = found{b, res, nil, m.directDef(b), nil, true, nil}
 					}
 				}
-				if len(f.results) > 0 && ctx.Err() == nil {
+				if len(f.results) > 0 && srcCtx.Err() == nil {
 					// the voice-overs of release pages (a Russian
 					// tracker's; topicBudget at most, cached)
-					f.topics = m.readTopics(ctx, f.src, q, f.results)
+					f.topics = m.readTopics(srcCtx, f.src, q, f.results)
 				}
 			}
 			mu.Lock()
-			defer mu.Unlock()
+			if settled {
+				mu.Unlock()
+				return
+			}
 			out[i] = f
 			left--
 			report()
+			mu.Unlock()
+			if settling && len(f.results) > 0 && len(m.assemble(ctx, q, prefs, []found{f}).Releases) > 0 {
+				usableOnce.Do(func() { close(usable) })
+			}
 		}()
 	}
-	wg.Wait()
+	final := out
+	if settling && m.awaitSettled(ctx, &wg, usable, settle) {
+		mu.Lock()
+		settled = true
+		final = slices.Clone(out)
+		mu.Unlock()
+		var pending []string
+		for i := range final {
+			if !final[i].done {
+				// not answered: Failed says so (a timeout's words)
+				final[i].done, final[i].err = true, errSourceTimeout
+				pending = append(pending, final[i].src.Name)
+			}
+		}
+		cancelSources()
+		m.log.Info("indexer: search settled before every source answered", "pending", pending)
+	} else {
+		wg.Wait()
+	}
 	if snaps != nil {
 		close(snaps)
 	}
@@ -323,7 +390,45 @@ func (m *Manager) Search(ctx context.Context, q SearchRequest) (SearchResponse, 
 	if err := ctx.Err(); err != nil {
 		return SearchResponse{}, err
 	}
-	return m.assemble(ctx, q, prefs, out), nil
+	return m.assemble(ctx, q, prefs, final), nil
+}
+
+// awaitSettled waits for the sources of a settling search; true: it settled
+// with some still pending (the caller drops them), false: every source
+// answered (or ctx ended).
+func (m *Manager) awaitSettled(ctx context.Context, wg *sync.WaitGroup, usable <-chan struct{}, o settleOpts) bool {
+	began := time.Now()
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return false
+	case <-ctx.Done():
+		return false
+	case <-usable:
+	}
+	wait := min(o.grace, o.limit-time.Since(began))
+	if wait <= 0 {
+		select {
+		case <-done:
+			return false
+		default:
+			return true
+		}
+	}
+	t := time.NewTimer(wait)
+	defer t.Stop()
+	select {
+	case <-done:
+		return false
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
 }
 
 // assemble scores, deduplicates and sorts the releases of the sources that
