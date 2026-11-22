@@ -188,7 +188,10 @@ type settleOpts struct{ grace, limit time.Duration }
 // The sources still pending are cancelled and reported in Failed as not
 // answering (no status of theirs changes). Without a usable release the
 // search waits for the sources as usual, so a title only a slow source has
-// is still found. WithProgress still reports the sources up to that point.
+// is still found, except that a source which failed its last search (a
+// timeout, an unreachable site) is waited for FlakyBudget only, not the
+// whole search timeout: a dead site never holds the start up for long
+// (sourceBudget). WithProgress still reports the sources up to that point.
 func WithSettle(ctx context.Context, grace, limit time.Duration) context.Context {
 	return context.WithValue(ctx, settleKey{}, settleOpts{grace: grace, limit: limit})
 }
@@ -643,12 +646,14 @@ func kindConfig(kind string) map[string]string {
 	return nil
 }
 
-// searchSource runs the queries on one source within the search timeout.
+// searchSource runs the queries on one source within its budget (the search
+// timeout; sourceBudget).
 // Russian trackers name seasons «Сезон 1», not S01, so they get the title
 // alone and Score filters seasons; other trackers get "<title> S01" (big
 // international sites return only the first results for a long-running show).
 func (m *Manager) searchSource(ctx context.Context, s Source, q SearchRequest, queries []string) ([]Result, error) {
-	sctx, cancel := context.WithTimeout(ctx, m.searchTimeout)
+	budget := m.sourceBudget(ctx, s.ID)
+	sctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	r, err := m.runner(s)
 	if err != nil {
@@ -681,15 +686,24 @@ func (m *Manager) searchSource(ctx context.Context, s Source, q SearchRequest, q
 			if ok {
 				return results, nil // partial results are still results
 			}
+			if budget < m.searchTimeout && sctx.Err() != nil {
+				// a flaky source cut short by the quick budget: still not
+				// answering, but not shown as broken for that alone
+				m.markFailed(s.ID)
+				return nil, err
+			}
 			m.setStatus(ctx, s.ID, StatusError, humanError(err))
 			if errors.Is(err, cardigann.ErrLoginFailed) || errors.Is(err, cardigann.ErrCaptcha) {
 				m.rest(s.ID)
+			} else {
+				m.markFailed(s.ID)
 			}
 			return nil, err
 		}
 		ok = true
 		results = append(results, res...)
 	}
+	m.markAnswered(s.ID)
 	m.setStatus(ctx, s.ID, StatusOK, "")
 	return results, nil
 }

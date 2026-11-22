@@ -98,6 +98,11 @@ type Manager struct {
 	// resting: sources whose sign-in a tracker refused, left out of
 	// searches until then (see rest)
 	resting map[int64]time.Time
+	// failing: when a source's last search failed (a timeout, an
+	// unreachable site), until one of its searches answers (see
+	// markFailed); flakyBudget is what a quick search gives such a source
+	failing     map[int64]time.Time
+	flakyBudget time.Duration
 
 	// importMu serialises Prowlarr imports: their «already added» check and
 	// the insert must be one step, or two requests add a tracker twice.
@@ -124,8 +129,8 @@ func NewManager(db *sql.DB, cat *Catalog, o Options) *Manager {
 	m := &Manager{
 		db: db, cat: cat, http: o.HTTP, flareSolverr: o.FlareSolverr,
 		searchTimeout: o.SearchTimeout, testTimeout: o.TestTimeout, log: o.Logger, onStatus: o.OnStatus,
-		studios: o.Studios,
-		now:     time.Now, runners: map[int64]*cachedRunner{}, directHTTP: opdsHTTP,
+		studios: o.Studios, flakyBudget: FlakyBudget,
+		now: time.Now, runners: map[int64]*cachedRunner{}, directHTTP: opdsHTTP,
 	}
 	if m.searchTimeout <= 0 {
 		m.searchTimeout = 20 * time.Second
@@ -503,11 +508,75 @@ func (m *Manager) rest(id int64) {
 	m.resting[id] = m.now().Add(restAfterRefusedSignIn)
 }
 
-// wake ends the rest of source id.
+// wake ends the rest of source id, and what is held against it for a
+// failed search.
 func (m *Manager) wake(id int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.resting, id)
+	delete(m.failing, id)
+}
+
+// FlakyBudget is how long a quick search (WithSettle) waits for a source
+// that failed its last search, instead of the search timeout; flakyFor is
+// how long after that failure the source is still held to it.
+const (
+	FlakyBudget = 4 * time.Second
+	flakyFor    = 15 * time.Minute
+)
+
+// markFailed notes that a search of source id failed on its own (not
+// cancelled): a timeout, an unreachable or broken site. Every quick search
+// that fails it again keeps the note; an answer, or flakyFor without one,
+// ends it. (A refused sign-in is rest's: that source is not asked at all.)
+func (m *Manager) markFailed(id int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.failing == nil {
+		m.failing = map[int64]time.Time{}
+	}
+	m.failing[id] = m.now()
+}
+
+// markAnswered ends the note of markFailed: the source answered.
+func (m *Manager) markAnswered(id int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.failing, id)
+}
+
+// isFlaky: source id failed its last search lately (see markFailed).
+func (m *Manager) isFlaky(id int64) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.flakyLocked(id)
+}
+
+// flakyLocked is isFlaky under m.mu: a note older than flakyFor is dropped.
+func (m *Manager) flakyLocked(id int64) bool {
+	at, ok := m.failing[id]
+	if ok && !m.now().Before(at.Add(flakyFor)) {
+		delete(m.failing, id)
+		return false
+	}
+	return ok
+}
+
+// sourceBudget is how long a search of source id waits for it: the search
+// timeout, or in a quick search (WithSettle: a start that must not wait
+// for a dead site) a short one for a source that failed its last search —
+// it is still asked, so one that is back answers at once and is trusted
+// again, but a dead one holds the start up for FlakyBudget, not for the
+// whole timeout. A search for a list that wants every source (no
+// WithSettle) keeps the timeout.
+func (m *Manager) sourceBudget(ctx context.Context, id int64) time.Duration {
+	if !Settling(ctx) {
+		return m.searchTimeout
+	}
+	if !m.isFlaky(id) {
+		return m.searchTimeout
+	}
+	return min(m.searchTimeout, m.flakyBudget)
 }
 
 // isResting: source id is left out of searches now.
