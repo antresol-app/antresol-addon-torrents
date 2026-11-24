@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -601,6 +602,73 @@ func TestDedupKeyByDetailsPage(t *testing.T) {
 	y := ScoredRelease{Result: Result{Details: "https://site/index.php", Link: "/dl/2"}, SourceID: 2}
 	if dedupKey(x, shared) == dedupKey(y, shared) {
 		t.Errorf("rows of a shared page merged: %q", dedupKey(x, shared))
+	}
+}
+
+// A search names the tracker of each source that answered or failed by the
+// source the user set up, and lists the ids that stand for it: the backup
+// way in answers in the primary's place and its releases carry its own id,
+// so the tracking scan can tell which of its earlier rows a failed tracker
+// owns.
+func TestSearchNamesTheTrackerOfAnswersAndFailures(t *testing.T) {
+	e := newEnv(t)
+	var primaryDown, backupDown atomic.Bool
+	handler := func(down *atomic.Bool, link string) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if down.Load() && r.URL.Query().Get("q") != "" {
+				http.Error(w, "blocked", http.StatusForbidden)
+				return
+			}
+			serve(page(row{title: "Дюна (2024) WEB-DL 1080p", link: link, size: "10 GB", seeders: 5})).ServeHTTP(w, r)
+		})
+	}
+	e.def("rutracker", "RuTracker.org", handler(&primaryDown, "/dl/1"))
+	e.def("rutracker-org-cookie", "RuTracker.org (cookie)", handler(&backupDown, "/dl/2"))
+	primary := e.add("rutracker")
+	backup := e.add("rutracker-org-cookie")
+	q := SearchRequest{Text: "Дюна", Kind: "movie", Year: 2024}
+	search := func() SearchResponse {
+		t.Helper()
+		resp, err := e.m.Search(context.Background(), q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+
+	// the primary answers
+	if resp := search(); !slices.Equal(resp.AnsweredIDs, []int64{primary.ID}) || resp.Answered != 1 || len(resp.Failed) != 0 {
+		t.Fatalf("answered %v (%d), failed %+v; want the primary", resp.AnsweredIDs, resp.Answered, resp.Failed)
+	}
+	// the backup answers in its place: still the primary's tracker
+	primaryDown.Store(true)
+	resp := search()
+	if !slices.Equal(resp.AnsweredIDs, []int64{primary.ID}) || len(resp.Failed) != 0 || resp.Releases[0].SourceID != backup.ID {
+		t.Fatalf("answered %v, failed %+v, release of %d; want the primary's tracker, the backup's release", resp.AnsweredIDs, resp.Failed, resp.Releases[0].SourceID)
+	}
+	// neither answers: the tracker failed, both ways in stand for it
+	backupDown.Store(true)
+	resp = search()
+	if len(resp.AnsweredIDs) != 0 || resp.Answered != 0 || len(resp.Failed) != 1 {
+		t.Fatalf("answered %v, failed %+v; want one failure", resp.AnsweredIDs, resp.Failed)
+	}
+	if f := resp.Failed[0]; f.Tracker() != primary.ID || !slices.Equal(f.Ids(), []int64{primary.ID, backup.ID}) {
+		t.Fatalf("failed %+v: tracker %d, ids %v; want the primary's tracker standing for %d and %d", f, f.Tracker(), f.Ids(), primary.ID, backup.ID)
+	}
+	// the primary resting after a refused sign-in: the backup is asked in
+	// its place, and answers or fails as the primary's tracker
+	e.m.rest(primary.ID)
+	resp = search()
+	if len(resp.Failed) != 1 || resp.Failed[0].SourceID != backup.ID || resp.Failed[0].Tracker() != primary.ID {
+		t.Fatalf("primary resting, backup down: failed %+v, want the backup's id for the primary's tracker", resp.Failed)
+	}
+	backupDown.Store(false)
+	if resp = search(); !slices.Equal(resp.AnsweredIDs, []int64{primary.ID}) || len(resp.Failed) != 0 {
+		t.Fatalf("primary resting, backup up: answered %v, failed %+v; want the primary's tracker", resp.AnsweredIDs, resp.Failed)
+	}
+	// a source with no backup stands for itself
+	if f := (SourceError{SourceID: 9}); f.Tracker() != 9 || !slices.Equal(f.Ids(), []int64{9}) {
+		t.Fatalf("a failure naming one source: tracker %d, ids %v", f.Tracker(), f.Ids())
 	}
 }
 

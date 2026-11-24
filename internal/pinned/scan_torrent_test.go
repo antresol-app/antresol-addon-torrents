@@ -17,18 +17,19 @@ type fakeSearcher struct {
 	releases []indexer.ScoredRelease
 	// failed and answered: the sources that did not and did answer (none of
 	// either: no source is set up)
-	failed   []indexer.SourceError
-	answered int
-	reqs     []indexer.SearchRequest
-	at       []time.Time
-	bg       []bool // each search's ctx was a background one
+	failed      []indexer.SourceError
+	answered    int
+	answeredIDs []int64 // the answering sources' trackers
+	reqs        []indexer.SearchRequest
+	at          []time.Time
+	bg          []bool // each search's ctx was a background one
 }
 
 func (f *fakeSearcher) Search(ctx context.Context, q indexer.SearchRequest) (indexer.SearchResponse, error) {
 	f.reqs = append(f.reqs, q)
 	f.at = append(f.at, time.Now())
 	f.bg = append(f.bg, indexer.IsBackground(ctx))
-	return indexer.SearchResponse{Releases: f.releases, Failed: f.failed, Answered: f.answered}, nil
+	return indexer.SearchResponse{Releases: f.releases, Failed: f.failed, Answered: f.answered, AnsweredIDs: f.answeredIDs}, nil
 }
 
 // down makes every source of the fake fail (n of them).

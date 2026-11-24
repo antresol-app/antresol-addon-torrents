@@ -73,7 +73,9 @@ func (*torrentScanner) Kind() string { return "torrent" }
 // Scan returns ErrUnchanged for a title searched within the day
 // (by this process, or by the last_seen of its torrent rows). A search that
 // not one source answered counts as no search: it is an error, and the title
-// is searched again by the next round.
+// is searched again by the next round. When some sources failed and others
+// answered, the rows of those that failed are returned as they were (see
+// settle), the answering sources' rows replaced by what they found.
 func (c *torrentScanner) Scan(ctx context.Context, t tracking.Title, eps []tracking.Episode) ([]tracking.Source, error) {
 	if c.search == nil || strings.TrimSpace(t.Name) == "" {
 		return nil, nil
@@ -104,6 +106,12 @@ func (c *torrentScanner) Scan(ctx context.Context, t tracking.Title, eps []track
 		// core is not told an empty list, which would delete the rows it
 		// holds and set the kind's baseline; an error keeps both.
 		return nil, errNoSourceAnswered
+	}
+	// a source that failed while others answered keeps its earlier rows
+	// (the core replaces the title's rows with what this returns)
+	keep, err := c.settle(ctx, t.ID, res, prev, now)
+	if err != nil {
+		return nil, err
 	}
 	c.mu.Lock()
 	c.last[t.ID] = now
@@ -138,13 +146,15 @@ func (c *torrentScanner) Scan(ctx context.Context, t tracking.Title, eps []track
 				Ref: ref, Provider: r.SourceName, Quality: qualityOf(r.Title), Labels: labels, Meta: meta})
 		}
 	}
-	if t.Kind != "movie" {
+	if t.Kind == "movie" {
+		out = keepPrev(out, prev, keep)
+	} else {
 		// only one season is searched: the others keep their rows
 		given := map[int]bool{q.Season: true}
 		for _, x := range out {
 			given[x.Season] = true
 		}
-		out = keepPrev(out, prev, func(x tracking.Source) bool { return !given[x.Season] })
+		out = keepPrev(out, prev, func(x tracking.Source) bool { return !given[x.Season] || keep(x) })
 		if err := c.suggest(ctx, t, eps, res.Releases, q.Season, today); err != nil && ctx.Err() == nil {
 			c.pins.log().Warn("pinned: suggestion", "title", t.ID, "err", err)
 		}

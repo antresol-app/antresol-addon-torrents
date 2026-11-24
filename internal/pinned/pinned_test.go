@@ -171,19 +171,21 @@ func (f *fakeEngine) Replace(ctx context.Context, oldIH string, mf []byte, keep 
 }
 
 type env struct {
-	svc   *Service
-	track *coretest.Tracking
-	lib   *coretest.Library
-	idx   *fakeIndexer
-	eng   *fakeEngine
-	title tracking.Title
-	now   time.Time
-	users []int64
+	dbFile string
+	svc    *Service
+	track  *coretest.Tracking
+	lib    *coretest.Library
+	idx    *fakeIndexer
+	eng    *fakeEngine
+	title  tracking.Title
+	now    time.Time
+	users  []int64
 }
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
-	d, err := db.Open(filepath.Join(t.TempDir(), "v.db"))
+	dbFile := filepath.Join(t.TempDir(), "v.db")
+	d, err := db.Open(dbFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,6 +196,7 @@ func newEnv(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	e := &env{
+		dbFile: dbFile,
 		idx: &fakeIndexer{sources: []indexer.Source{{ID: 3, Name: "Tracker", Enabled: true}, {ID: 4, Name: "Other", Enabled: true}},
 			hosts: map[int64]string{3: "tracker.test", 4: "other.test"}, downloads: map[string]cardigann.DownloadResult{}},
 		eng:   &fakeEngine{has: map[string]bool{}, magnets: map[string][]byte{}},

@@ -39,11 +39,11 @@ func versions(t *testing.T, d *sql.DB) []int {
 }
 
 // TestStore_MigratesFresh: a new torrents.db gets the twelve replayed
-// migrations, the addon's own ones (0013–0016) and the family's tables; no core
+// migrations, the addon's own ones (0013–0017) and the family's tables; no core
 // table is referenced (a follow of user 42 goes in with no users table).
 func TestStore_MigratesFresh(t *testing.T) {
 	d := open(t, filepath.Join(t.TempDir(), "torrents.db"))
-	if got, want := versions(t, d), []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}; !slices.Equal(got, want) {
+	if got, want := versions(t, d), []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17}; !slices.Equal(got, want) {
 		t.Fatalf("versions %v, want %v", got, want)
 	}
 	for _, tbl := range []string{"torrents", "torrent_pieces", "sources", "acquisitions", "follows", "release_attempts", "release_switch_failures", "pinned_releases"} {
@@ -79,6 +79,13 @@ func TestStore_MigratesFresh(t *testing.T) {
 			t.Fatalf("column sources.%s: %d %v", col, n, err)
 		}
 	}
+	// 0017: when a source last answered a title's scan
+	if _, err := d.Exec(`INSERT INTO torrent_scan_answers (title_id, source_id, answered_at) VALUES (7, 3, 'x')`); err != nil {
+		t.Fatalf("scan answer of title 7 (no core table to reference): %v", err)
+	}
+	if _, err := d.Exec(`INSERT INTO torrent_scan_answers (title_id, source_id, answered_at) VALUES (7, 3, 'y')`); err == nil {
+		t.Fatal("one row per title and source")
+	}
 	var fk int
 	if err := d.QueryRow(`PRAGMA foreign_keys`).Scan(&fk); err != nil || fk != 1 {
 		t.Fatalf("foreign_keys %d %v", fk, err)
@@ -101,7 +108,7 @@ func TestStore_Reopen(t *testing.T) {
 	}
 	d.Close()
 	d = open(t, p)
-	if got := versions(t, d); len(got) != 16 {
+	if got := versions(t, d); len(got) != 17 {
 		t.Fatalf("versions %v", got)
 	}
 	var n int

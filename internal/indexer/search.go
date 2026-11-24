@@ -127,6 +127,29 @@ type SourceError struct {
 	SourceID int64  `json:"sourceId"`
 	Name     string `json:"name"`
 	Message  string `json:"message"`
+	// Stands: the ids of the sources that stand for the failed tracker, the
+	// one the user set up first, then its backup way in (RuTracker by
+	// cookie): a release of the tracker names either, whichever answered
+	// last time. Not sent to clients: the tracking scan reads it to know
+	// which of its earlier rows belong to the tracker. nil: SourceID alone.
+	Stands []int64 `json:"-"`
+}
+
+// Tracker is the id the tracker is known by: the source the user set up,
+// not the backup way into it that may have answered in its place.
+func (e SourceError) Tracker() int64 {
+	if len(e.Stands) > 0 {
+		return e.Stands[0]
+	}
+	return e.SourceID
+}
+
+// Ids are the ids of the sources that stand for the failed tracker.
+func (e SourceError) Ids() []int64 {
+	if len(e.Stands) > 0 {
+		return e.Stands
+	}
+	return []int64{e.SourceID}
 }
 
 // SearchResponse: Releases are acceptable releases, best first; Rejected
@@ -140,6 +163,9 @@ type SearchResponse struct {
 	// caller that must not take «nothing found» for «nobody could look»
 	// (the tracking scan) reads it.
 	Answered int `json:"-"`
+	// AnsweredIDs are those sources' trackers (SourceError.Tracker: the
+	// source the user set up, also when its backup way in answered).
+	AnsweredIDs []int64 `json:"-"`
 	// Prefs: the release preferences the releases were scored by (nil
 	// from a source of no preferences).
 	Prefs *Prefs `json:"-"`
@@ -218,6 +244,8 @@ type found struct {
 	// topics: what release pages said of their voice-overs, by Details
 	// link (readTopics; nil until read)
 	topics map[string]topicInfo
+	// stands: the ids that stand for the tracker (SourceError.Stands)
+	stands []int64
 }
 
 // Search queries all enabled sources in parallel (each limited by the
@@ -243,6 +271,15 @@ func (m *Manager) Search(ctx context.Context, q SearchRequest) (SearchResponse, 
 			sources = append(sources, s)
 		}
 	}
+	// stands: the ids that stand for each source asked, the source itself
+	// and its backup way in (a release carries the id of whichever answered)
+	stands := make(map[int64][]int64, len(sources))
+	for _, s := range sources {
+		stands[s.ID] = []int64{s.ID}
+		if b, ok := backup[s.ID]; ok {
+			stands[s.ID] = append(stands[s.ID], b.ID)
+		}
+	}
 	// a source resting after a refused sign-in is not asked; its backup
 	// (the other way into the same tracker) answers for it
 	// (without one it is reported failed, not asked: the search is still
@@ -252,6 +289,7 @@ func (m *Manager) Search(ctx context.Context, q SearchRequest) (SearchResponse, 
 			delete(backup, s.ID)
 			b.Name = s.Name
 			sources[i] = b
+			stands[b.ID] = stands[s.ID]
 		}
 	}
 	sortSources(sources)
@@ -277,7 +315,7 @@ func (m *Manager) Search(ctx context.Context, q SearchRequest) (SearchResponse, 
 	settled := false  // the search returned without the pending sources: they write nothing
 	out := make([]found, len(sources))
 	for i, s := range sources {
-		out[i].src = s
+		out[i].src, out[i].stands = s, stands[s.ID]
 	}
 	left := len(sources)
 	// deliver words a snapshot of out and hands it to progress. It runs
@@ -333,7 +371,7 @@ func (m *Manager) Search(ctx context.Context, q SearchRequest) (SearchResponse, 
 			var f found
 			if isOPDS(s) {
 				res, tags, err := m.searchOPDS(srcCtx, s, q, queries)
-				f = found{s, res, err, true, tags, true, nil}
+				f = found{s, res, err, true, tags, true, nil, nil}
 			} else {
 				var res []Result
 				var err error
@@ -342,14 +380,14 @@ func (m *Manager) Search(ctx context.Context, q SearchRequest) (SearchResponse, 
 				} else {
 					res, err = m.searchSource(srcCtx, s, q, queries)
 				}
-				f = found{s, res, err, m.directDef(s), nil, true, nil}
+				f = found{s, res, err, m.directDef(s), nil, true, nil, nil}
 				if b, ok := backup[s.ID]; ok && err != nil && srcCtx.Err() == nil && !m.isResting(b.ID) {
 					// the second way in, only now: the tracker is asked
 					// once per search, not twice
 					if res, berr := m.searchSource(srcCtx, b, q, queries); berr == nil {
 						m.log.Info("indexer: answered through the backup source", "source", s.Name, "backup", b.Name)
 						b.Name = s.Name // one tracker to the user; downloads go through b
-						f = found{b, res, nil, m.directDef(b), nil, true, nil}
+						f = found{b, res, nil, m.directDef(b), nil, true, nil, nil}
 					}
 				}
 				if len(f.results) > 0 && srcCtx.Err() == nil {
@@ -358,6 +396,7 @@ func (m *Manager) Search(ctx context.Context, q SearchRequest) (SearchResponse, 
 					f.topics = m.readTopics(srcCtx, f.src, q, f.results)
 				}
 			}
+			f.stands = stands[s.ID]
 			mu.Lock()
 			if settled {
 				mu.Unlock()
@@ -461,9 +500,14 @@ func (m *Manager) assemble(ctx context.Context, q SearchRequest, prefs Prefs, ou
 			russian[f.src.ID] = true
 		}
 		if f.err != nil {
-			resp.Failed = append(resp.Failed, SourceError{SourceID: f.src.ID, Name: f.src.Name, Message: humanErrorIn(ctx, f.err)})
+			resp.Failed = append(resp.Failed, SourceError{SourceID: f.src.ID, Name: f.src.Name, Message: humanErrorIn(ctx, f.err), Stands: f.stands})
 		} else {
 			resp.Answered++
+			id := f.src.ID
+			if len(f.stands) > 0 {
+				id = f.stands[0]
+			}
+			resp.AnsweredIDs = append(resp.AnsweredIDs, id)
 		}
 		for _, r := range f.results {
 			if r.Link == "" && r.Magnet == "" {
