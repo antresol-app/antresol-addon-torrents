@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/tracking"
+	"github.com/antresol-app/antresol-addon-torrents/internal/indexer"
 	"github.com/antresol-app/antresol-addon-torrents/internal/pinned"
 	"github.com/antresol-app/antresol-addon-torrents/internal/store"
 	_ "github.com/antresol-app/antresol-addon-torrents/internal/strings"
@@ -30,11 +31,13 @@ type fakeScanner struct {
 	err  error
 	got  []tracking.Title
 	eps  [][]tracking.Episode
+	bg   []bool // each call's ctx was a background one (indexer.Background)
 }
 
-func (f *fakeScanner) Scan(_ context.Context, t tracking.Title, eps []tracking.Episode) ([]tracking.Source, error) {
+func (f *fakeScanner) Scan(ctx context.Context, t tracking.Title, eps []tracking.Episode) ([]tracking.Source, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.bg = append(f.bg, indexer.IsBackground(ctx))
 	f.got = append(f.got, t)
 	f.eps = append(f.eps, eps)
 	return f.srcs, f.err
@@ -45,6 +48,7 @@ type syncs struct {
 	mu    sync.Mutex
 	ids   []int64
 	ctxOK []bool // the call's ctx was still alive (the run's, not the hook's)
+	bg    []bool // the call's ctx was a background one (indexer.Background)
 }
 
 func (s *syncs) sync(ctx context.Context, t tracking.Title) error {
@@ -53,6 +57,7 @@ func (s *syncs) sync(ctx context.Context, t tracking.Title) error {
 	defer s.mu.Unlock()
 	s.ids = append(s.ids, t.ID)
 	s.ctxOK = append(s.ctxOK, ctx.Err() == nil)
+	s.bg = append(s.bg, indexer.IsBackground(ctx))
 	return nil
 }
 
@@ -147,6 +152,34 @@ func TestScanPinned_AnswersThenSyncsOnce(t *testing.T) {
 	wg.Wait()
 	if got := s.seen(); len(got) != 2 {
 		t.Fatalf("syncs after torrent scan %v", got)
+	}
+}
+
+// TestScanHooksAreBackground: the core's scans, and the Sync after a pinned
+// one, search on a background context: a paused source (see
+// indexer.Background) is left alone for them, not for a person's search.
+func TestScanHooksAreBackground(t *testing.T) {
+	pin, tor := &fakeScanner{srcs: pinSources()}, &fakeScanner{}
+	var s syncs
+	run, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var wg sync.WaitGroup
+	d := Deps{Pinned: pin, Torrent: tor, Sync: s.sync, Run: run, wait: &wg}
+	if code, b := call(t, d, "tracking.scan:pinned", scanBody); code != 200 {
+		t.Fatalf("%d %s", code, b)
+	}
+	if code, b := call(t, d, "tracking.scan:torrent", scanBody); code != 200 {
+		t.Fatalf("%d %s", code, b)
+	}
+	wg.Wait()
+	if !reflect.DeepEqual(pin.bg, []bool{true}) || !reflect.DeepEqual(tor.bg, []bool{true}) {
+		t.Fatalf("scans on a background context: pinned %v, torrent %v", pin.bg, tor.bg)
+	}
+	if !reflect.DeepEqual(s.bg, []bool{true}) {
+		t.Fatalf("Sync on a background context: %v", s.bg)
+	}
+	if indexer.IsBackground(run) {
+		t.Fatal("the run context itself was marked")
 	}
 }
 

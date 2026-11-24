@@ -15,14 +15,28 @@ import (
 
 type fakeSearcher struct {
 	releases []indexer.ScoredRelease
+	// failed and answered: the sources that did not and did answer (none of
+	// either: no source is set up)
+	failed   []indexer.SourceError
+	answered int
 	reqs     []indexer.SearchRequest
 	at       []time.Time
+	bg       []bool // each search's ctx was a background one
 }
 
-func (f *fakeSearcher) Search(_ context.Context, q indexer.SearchRequest) (indexer.SearchResponse, error) {
+func (f *fakeSearcher) Search(ctx context.Context, q indexer.SearchRequest) (indexer.SearchResponse, error) {
 	f.reqs = append(f.reqs, q)
 	f.at = append(f.at, time.Now())
-	return indexer.SearchResponse{Releases: f.releases}, nil
+	f.bg = append(f.bg, indexer.IsBackground(ctx))
+	return indexer.SearchResponse{Releases: f.releases, Failed: f.failed, Answered: f.answered}, nil
+}
+
+// down makes every source of the fake fail (n of them).
+func (f *fakeSearcher) down(n int) {
+	f.failed, f.answered = nil, 0
+	for i := range n {
+		f.failed = append(f.failed, indexer.SourceError{SourceID: int64(i + 1), Name: fmt.Sprintf("Tracker %d", i+1), Message: "FlareSolverr failed"})
+	}
 }
 
 func rel(title, link string, score int) indexer.ScoredRelease {
@@ -351,5 +365,104 @@ func TestTorrentScanner_Unchanged(t *testing.T) {
 	e.track.Err = errors.New("core down")
 	if _, err := sc.Scan(ctx, ti, season1(1)); err == nil || errors.Is(err, ErrUnchanged) {
 		t.Fatalf("core down: %v", err)
+	}
+}
+
+// The scanner's searches are background searches: the sources FlareSolverr
+// failed on are left alone for them (see indexer.Background).
+func TestTorrentScannerSearchesInTheBackground(t *testing.T) {
+	e, ctx := newEnv(t), context.Background()
+	f := &fakeSearcher{answered: 1}
+	sc := newTorrentScanner(e, f, 0)
+	if _, err := sc.Scan(ctx, tracking.Title{ID: e.title.ID, Kind: "series", Name: "Show"}, season1(1)); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.bg) != 1 || !f.bg[0] {
+		t.Fatalf("search on a background context: %v", f.bg)
+	}
+}
+
+// A title whose sources all failed was not searched: it is no «nothing
+// found» for a day. The next round asks again (a source that is paused
+// answers at once, the others are asked); one that some source answered,
+// even with no release, is searched for the day.
+func TestTorrentScannerRetriesWhenEverySourceFailed(t *testing.T) {
+	e, ctx := newEnv(t), context.Background()
+	ti := tracking.Title{ID: e.title.ID, Kind: "series", Name: "Show"}
+	f := &fakeSearcher{}
+	f.down(2)
+	sc := newTorrentScanner(e, f, 0)
+
+	for round := 1; round <= 3; round++ {
+		got, err := sc.Scan(ctx, ti, season1(1))
+		if err == nil || errors.Is(err, ErrUnchanged) || got != nil {
+			t.Fatalf("round %d: %v, %v: want an error (the core keeps its rows)", round, got, err)
+		}
+		if len(f.reqs) != round {
+			t.Fatalf("round %d: %d searches, want %d: a title that no source answered is searched again", round, len(f.reqs), round)
+		}
+		e.now = e.now.Add(time.Minute)
+	}
+	if _, ok := sc.last[ti.ID]; ok {
+		t.Fatal("a search no source answered was recorded")
+	}
+
+	// one source answers, with nothing: searched
+	f.answered, f.failed = 1, f.failed[:1]
+	got, err := sc.Scan(ctx, ti, season1(1))
+	if err != nil || len(got) != 0 || len(f.reqs) != 4 {
+		t.Fatalf("answered with nothing: %v, %v, %d searches", got, err, len(f.reqs))
+	}
+	if _, err := sc.Scan(ctx, ti, season1(1)); !errors.Is(err, ErrUnchanged) || len(f.reqs) != 4 {
+		t.Fatalf("within the day: %v, %d searches", err, len(f.reqs))
+	}
+}
+
+// The rows the core holds are not touched by a scan that no source
+// answered: not deleted (an empty answer would delete them), and not
+// refreshed (their last_seen is what the day is counted by after a
+// restart).
+func TestTorrentScannerAllFailedKeepsTheRowsAndTheirLastSeen(t *testing.T) {
+	e, ctx := newEnv(t), context.Background()
+	ti := tracking.Title{ID: e.title.ID, Kind: "series", Name: "Show"}
+	f := &fakeSearcher{answered: 1, releases: []indexer.ScoredRelease{rel("Show.S01E01.1080p-GRP", "https://tracker.test/dl/1", 1)}}
+	first := e.now
+	if err := e.track.Refresh(ctx, ti.ID, season1(1), first, newTorrentScanner(e, f, 0)); err != nil {
+		t.Fatal(err)
+	}
+	rows := func() []tracking.Source {
+		return ofKind(e.track.SourcesOf(ti.ID), "torrent")
+	}
+	if got := rows(); len(got) != 1 || !got[0].LastSeen.Equal(first) {
+		t.Fatalf("rows after the first scan: %+v", got)
+	}
+
+	// a day later every source is down (a new process: the rows' last_seen
+	// is all it knows)
+	e.now = first.Add(25 * time.Hour)
+	f.down(2)
+	f.releases = nil
+	for range 2 {
+		sc := newTorrentScanner(e, f, 0)
+		if err := e.track.Refresh(ctx, ti.ID, season1(1), e.now, sc); err != nil {
+			t.Fatal(err)
+		}
+		e.now = e.now.Add(time.Hour)
+	}
+	if len(f.reqs) != 3 {
+		t.Fatalf("%d searches, want 3 (one at first, one for each round of the outage)", len(f.reqs))
+	}
+	if got := rows(); len(got) != 1 || !got[0].LastSeen.Equal(first) {
+		t.Fatalf("rows after a scan nobody answered: %+v, want the one of %v untouched", got, first)
+	}
+
+	// back up: searched at once, the rows follow what was found
+	f.failed, f.answered = nil, 1
+	f.releases = []indexer.ScoredRelease{rel("Show.S01E01.1080p-GRP", "https://tracker.test/dl/2", 1)}
+	if err := e.track.Refresh(ctx, ti.ID, season1(1), e.now, newTorrentScanner(e, f, 0)); err != nil {
+		t.Fatal(err)
+	}
+	if got := rows(); len(got) != 1 || got[0].Ref != "https://tracker.test/dl/2" || len(f.reqs) != 4 {
+		t.Fatalf("rows after the sources came back: %+v, %d searches", got, len(f.reqs))
 	}
 }

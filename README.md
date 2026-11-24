@@ -74,11 +74,16 @@ request waits for it (and gives up with its own search if that takes too
 long), and what the request solved is kept for the next search. When
 FlareSolverr fails on a site (it does not answer, takes too long, does not
 get through the challenge), that source is paused for 30 minutes, twice as
-long after each failure in a row up to 6 hours. Its searches answer at once
-with the time they may come back (so does the source's status on
-**Settings → Server → Sources**), and a passing check of the source, saving
-its settings or changing the FlareSolverr address ends the pause. A failed
-sign-in is likewise not repeated by every search.
+long after each failure in a row up to 6 hours. The pause holds only the
+checks nobody waits on: the tracking scans, the follow rounds and the
+automatic switch of a dead download. They skip the source and answer at
+once with the time they resume (so does the source's status on
+**Settings → Server → Sources**). A search you start yourself (the release
+list, Watch now, a manual search, an app) still tries the paused source;
+an answer ends the pause, and a failure of such a search neither starts it
+nor makes it longer. A passing check of the source, saving its settings or
+changing the FlareSolverr address ends the pause too. A failed sign-in is
+likewise not repeated by every search.
 
 An address wins over the one found, in this order: the one saved in that
 field (saved once it answers), then the server's

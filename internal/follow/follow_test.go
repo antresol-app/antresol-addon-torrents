@@ -17,6 +17,7 @@ import (
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/library"
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/metadata/tmdb"
 	"github.com/antresol-app/antresol-addon-torrents/internal/coretest"
+	"github.com/antresol-app/antresol-addon-torrents/internal/indexer"
 	db "github.com/antresol-app/antresol-addon-torrents/internal/store"
 	"github.com/antresol-app/antresol/addonkit"
 )
@@ -34,11 +35,13 @@ type fakeAcq struct {
 	active, maxActive int
 	delay             time.Duration
 	note              string // AcquireResult.Note of each download
+	bg                []bool // each call's ctx was a background one (indexer.Background)
 }
 
-func (f *fakeAcq) Acquire(_ context.Context, r acquire.AcquireRequest) (acquire.AcquireResult, error) {
+func (f *fakeAcq) Acquire(ctx context.Context, r acquire.AcquireRequest) (acquire.AcquireResult, error) {
 	f.mu.Lock()
 	f.calls = append(f.calls, r)
+	f.bg = append(f.bg, indexer.IsBackground(ctx))
 	f.active++
 	f.maxActive = max(f.maxActive, f.active)
 	err := f.err
@@ -714,5 +717,51 @@ func TestFollow_DeletedProfileIDReused(t *testing.T) {
 	e2.users.Names[3] = "Папа"
 	if g, _ := e2.svc.Get(ctx, f2.ID); g.UserID != 3 {
 		t.Fatalf("an empty list forgot %+v", g)
+	}
+}
+
+func (f *fakeAcq) backgrounds() []bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]bool(nil), f.bg...)
+}
+
+// The rounds of the follows (the periodic one, the kicked ones) search in
+// the background: a source paused for a failed FlareSolverr is left alone for
+// them (indexer.Background). A check a person asks for is not.
+func TestRoundsSearchInTheBackground(t *testing.T) {
+	ctx := context.Background()
+	allOf := func(got []bool, want bool) bool {
+		for _, b := range got {
+			if b != want {
+				return false
+			}
+		}
+		return len(got) > 0
+	}
+
+	e := newEnv(t)
+	e.add("series", 42)
+	if err := e.svc.CheckAll(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.acq.backgrounds(); !allOf(got, true) {
+		t.Fatalf("CheckAll: %v", got)
+	}
+
+	e = newEnv(t)
+	e.add("movie", 7)
+	e.svc.runKicked(ctx) // what Run does with the follows Kick asked for
+	if got := e.acq.backgrounds(); !allOf(got, true) {
+		t.Fatalf("kicked: %v", got)
+	}
+
+	e = newEnv(t)
+	f := e.add("series", 42)
+	if _, err := e.svc.Check(ctx, f.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.acq.backgrounds(); !allOf(got, false) {
+		t.Fatalf("a person's Check: %v", got)
 	}
 }

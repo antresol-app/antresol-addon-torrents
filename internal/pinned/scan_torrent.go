@@ -2,6 +2,7 @@ package pinned
 
 import (
 	"context"
+	"errors"
 	"regexp"
 	"slices"
 	"strconv"
@@ -28,6 +29,10 @@ const (
 type searcher interface {
 	Search(ctx context.Context, q indexer.SearchRequest) (indexer.SearchResponse, error)
 }
+
+// errNoSourceAnswered is the answer of a scan of which every source failed
+// (the core logs it and keeps the title's rows).
+var errNoSourceAnswered = errors.New("pinned: no torrent source answered the search")
 
 // torrentScanner is the tracking scanner of kind "torrent".
 type torrentScanner struct {
@@ -66,11 +71,14 @@ func NewTorrentScanner(m *indexer.Manager, p *Service, top int) Scanner {
 func (*torrentScanner) Kind() string { return "torrent" }
 
 // Scan returns ErrUnchanged for a title searched within the day
-// (by this process, or by the last_seen of its torrent rows).
+// (by this process, or by the last_seen of its torrent rows). A search that
+// not one source answered counts as no search: it is an error, and the title
+// is searched again by the next round.
 func (c *torrentScanner) Scan(ctx context.Context, t tracking.Title, eps []tracking.Episode) ([]tracking.Source, error) {
 	if c.search == nil || strings.TrimSpace(t.Name) == "" {
 		return nil, nil
 	}
+	ctx = indexer.Background(ctx) // the core's round of scans: no one waits on its searches
 	now := c.pins.now()
 	all, err := c.pins.Tracking.Sources(ctx, t.ID)
 	if err != nil {
@@ -88,6 +96,14 @@ func (c *torrentScanner) Scan(ctx context.Context, t tracking.Title, eps []track
 	res, err := c.paced(ctx, q)
 	if err != nil {
 		return nil, err
+	}
+	if len(res.Failed) > 0 && res.Answered == 0 {
+		// no source looked (all failed, or were paused): that is no «nothing
+		// found». The title is not marked as searched (the next round asks
+		// again, the sources that are paused still answer at once), and the
+		// core is not told an empty list, which would delete the rows it
+		// holds and set the kind's baseline; an error keeps both.
+		return nil, errNoSourceAnswered
 	}
 	c.mu.Lock()
 	c.last[t.ID] = now

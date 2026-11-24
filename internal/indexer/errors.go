@@ -36,10 +36,11 @@ func humanErr(err error) error {
 	if msg := opds.ErrorMessage(err); msg != "" {
 		return i18n.Errorf(msg) // the address guard of OPDS and direct-download sources
 	}
-	// a search of a source paused for a failed FlareSolverr says until when
+	// a background search of a source paused for a failed FlareSolverr says
+	// until when automatic checks resume
 	var paused *solverPausedError
 	if errors.As(err, &paused) {
-		return i18n.Errorf("Сайт закрыт защитой от ботов (Cloudflare): FlareSolverr не справился, повтор после %s. Проверьте его в разделе «Настройки → Сервер → Настройки загрузок».", paused.until.Format("15:04"))
+		return i18n.Errorf("Сайт закрыт защитой от ботов (Cloudflare): FlareSolverr не справился. Автоматические проверки возобновятся после %s; поиск, который вы запустите сами, всё равно попробует. Проверьте FlareSolverr в разделе «Настройки → Сервер → Настройки загрузок».", paused.until.Format("15:04"))
 	}
 	switch {
 	// a search that gave up waiting for FlareSolverr's turn says so (also

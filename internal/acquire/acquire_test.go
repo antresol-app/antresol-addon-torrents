@@ -337,12 +337,14 @@ type fakeIndexer struct {
 	dl        *cardigann.DownloadResult           // what Download returns (nil: a stub metafile)
 	byLink    map[string]cardigann.DownloadResult // what Download returns for a link (before dl)
 	err       error                               // what Search fails with
+	bg        []bool                              // each search's ctx was a background one (indexer.Background)
 }
 
-func (f *fakeIndexer) Search(_ context.Context, q indexer.SearchRequest) (indexer.SearchResponse, error) {
+func (f *fakeIndexer) Search(ctx context.Context, q indexer.SearchRequest) (indexer.SearchResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.requests = append(f.requests, q)
+	f.bg = append(f.bg, indexer.IsBackground(ctx))
 	return f.resp, f.err
 }
 func (f *fakeIndexer) CheckReleaseLink(context.Context, int64, string) error { return nil }

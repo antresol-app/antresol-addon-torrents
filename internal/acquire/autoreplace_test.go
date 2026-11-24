@@ -600,3 +600,48 @@ func TestPeerRecordedAtOnce(t *testing.T) {
 		t.Fatal("had_peers not saved")
 	}
 }
+
+// The searches nobody waits on are background searches (indexer.Background:
+// a source paused for a failed FlareSolverr is left alone for them): the
+// automatic switch of a dead download, and a request that says no one waits
+// on its answer (the follow's, the channel fetch's). A person's request is not.
+func TestSearchesNobodyWaitsOnAreBackground(t *testing.T) {
+	shortWindow(t)
+	rels := indexer.SearchResponse{Releases: []indexer.ScoredRelease{
+		magnetRel("Дюна 2160p", ihOf('a'), 90),
+		magnetRel("Дюна 720p", ihOf('c'), 70),
+	}}
+
+	// a person's request: a plain context; a background one: marked
+	for _, bg := range []bool{false, true} {
+		e := newEnv(t)
+		e.idx.resp = rels
+		e.eng.nextIH = ihOf('a')
+		req := dune
+		req.Background = bg
+		if _, err := e.svc.Acquire(context.Background(), req); err != nil {
+			t.Fatal(err)
+		}
+		if len(e.idx.bg) != 1 || e.idx.bg[0] != bg {
+			t.Fatalf("request with Background=%v: searched on a background context: %v", bg, e.idx.bg)
+		}
+	}
+
+	// the switch of a download that went quiet: the person's first search,
+	// then the switch's own
+	e := newEnv(t)
+	p := withProbe(e)
+	e.idx.resp = rels
+	startDead(t, e, ihOf('a'), dune)
+	p.alive[ihOf('c')] = true
+	t0 := time.Now()
+	checkAt(e, t0)
+	e.eng.nextIH = ihOf('c')
+	checkAt(e, t0.Add(time.Minute+time.Second))
+	if _, ok := e.eng.Get(ihOf('c')); !ok {
+		t.Fatal("no switch")
+	}
+	if len(e.idx.bg) != 2 || e.idx.bg[0] || !e.idx.bg[1] {
+		t.Fatalf("searches on a background context: %v, want the person's, then the switch's", e.idx.bg)
+	}
+}

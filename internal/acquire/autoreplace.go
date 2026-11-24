@@ -273,7 +273,7 @@ func (s *Service) checkAutoReplace(ctx context.Context, now time.Time) {
 				delete(s.auto.switching, key)
 				s.auto.mu.Unlock()
 			}()
-			sctx, cancel := context.WithTimeout(s.root, switchTimeout)
+			sctx, cancel := context.WithTimeout(indexer.Background(s.root), switchTimeout) // no one waits on its searches
 			defer cancel()
 			s.autoReplace(sctx, a, key, now)
 		}()

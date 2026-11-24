@@ -23,6 +23,7 @@ import (
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/library"
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/metadata/tmdb"
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/release"
+	"github.com/antresol-app/antresol-addon-torrents/internal/indexer"
 	"github.com/antresol-app/antresol/addonkit"
 )
 
@@ -576,6 +577,7 @@ func (s *Service) takeKicked() []int64 {
 // runKicked checks the follows Kick asked for (a follow kicked again
 // during its own check is checked once more).
 func (s *Service) runKicked(ctx context.Context) {
+	ctx = indexer.Background(ctx) // no one waits on these checks' searches
 	for _, id := range s.takeKicked() {
 		if ctx.Err() != nil {
 			return
@@ -615,6 +617,7 @@ func (s *Service) Run(ctx context.Context) {
 // follow's error does not stop the others; TMDB unreachable (or refusing
 // the key) ends the round, as the rest would fail the same way.
 func (s *Service) CheckAll(ctx context.Context) error {
+	ctx = indexer.Background(ctx) // no one waits on the round's searches
 	rows, err := s.DB.QueryContext(ctx, `SELECT id FROM follows WHERE active=1 ORDER BY last_checked IS NOT NULL, last_checked, id`)
 	if err != nil {
 		return err

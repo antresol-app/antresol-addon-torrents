@@ -468,7 +468,9 @@ func (m *Manager) RecheckFailed(ctx context.Context) {
 }
 
 // Test logs in and runs an empty search; the outcome is stored as the
-// source status. The returned error carries a human message.
+// source status. The returned error carries a human message. It is the
+// admin's own check: it asks FlareSolverr also while the source is paused
+// (its answer ends the pause), and its failure starts or lengthens none.
 func (m *Manager) Test(ctx context.Context, id int64) error {
 	s, err := m.Get(ctx, id)
 	if err != nil {
@@ -493,8 +495,7 @@ func (m *Manager) Test(ctx context.Context, id int64) error {
 	}
 	if err != nil {
 		m.log.Info("indexer: source test failed", "source", s.Name, "err", cardigann.RedactText(err.Error()))
-		err = m.pausedFailure(id, err) // the test may have paused the source: say until when
-		m.setStatus(ctx, id, StatusError, humanError(err))
+		err = m.recordFailure(ctx, id, err)
 		return humanize("", err)
 	}
 	m.wake(id)
@@ -638,7 +639,7 @@ func (m *Manager) runner(s Source) (*cardigann.Runner, error) {
 	}
 	r.Now = func() time.Time { return m.now() }
 	id := s.ID
-	r.OnSolve = func(err error) { m.solverOutcome(id, r, err) }
+	r.OnSolve = func(ctx context.Context, err error) { m.solverOutcome(ctx, id, r, err) }
 	if def.Download != nil && def.Download.Direct {
 		// the site's pages choose the next requests and the response is
 		// saved into the library: no home network (unless the admin allows

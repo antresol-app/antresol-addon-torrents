@@ -8,6 +8,7 @@ import (
 
 	"github.com/antresol-app/antresol-addon-torrents/internal/coreadapt"
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/tracking"
+	"github.com/antresol-app/antresol-addon-torrents/internal/indexer"
 	"github.com/antresol-app/antresol-addon-torrents/internal/pinned"
 	"github.com/antresol-app/antresol/addonkit"
 )
@@ -30,6 +31,7 @@ var errBadScan = errors.New("trackinghooks: a scan request without its title")
 // {unchanged: true} exactly when it returns pinned.ErrUnchanged; another
 // error is a failure (500: the core logs it and keeps the rows).
 func scan(ctx context.Context, sc Scanner, in json.RawMessage) (tracking.Title, any, error) {
+	ctx = indexer.Background(ctx) // the core's round of scans: no one waits on its searches
 	var req addonkit.ScanRequest
 	if err := json.Unmarshal(in, &req); err != nil || req.Title.ID <= 0 {
 		return tracking.Title{}, nil, errBadScan
@@ -81,7 +83,7 @@ func (d Deps) afterScan(t tracking.Title) {
 		if d.wait != nil {
 			defer d.wait.Done()
 		}
-		ctx, cancel := context.WithTimeout(run, syncTimeout)
+		ctx, cancel := context.WithTimeout(indexer.Background(run), syncTimeout)
 		defer cancel()
 		if err := d.Sync(ctx, t); err != nil && run.Err() == nil {
 			d.log().Warn("torrents: download the missing episodes of a pinned release", "title", t.ID, "err", err)

@@ -336,9 +336,10 @@ func (r *Runner) solve(ctx context.Context, req *request) (*response, error) {
 	done := make(chan outcome, 1)
 	go func() {
 		defer r.SolverGate.release()
-		resp, err := r.callSolver(context.WithoutCancel(ctx), buf, target)
+		detached := context.WithoutCancel(ctx)
+		resp, err := r.callSolver(detached, buf, target)
 		if r.OnSolve != nil {
-			r.OnSolve(err) // before the slot is free: the next asker sees what this one learned
+			r.OnSolve(detached, err) // before the slot is free: the next asker sees what this one learned
 		}
 		done <- outcome{resp, err}
 	}()

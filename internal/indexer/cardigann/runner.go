@@ -52,8 +52,10 @@ type Runner struct {
 	// when it solved the page, else the error (an ErrCloudflare for a
 	// FlareSolverr that is unreachable, too slow or did not get through).
 	// It runs on the goroutine of the request, which may be one whose asker
-	// has gone, and before the next request is let through.
-	OnSolve func(err error)
+	// has gone, and before the next request is let through. ctx carries the
+	// values of the asker's context (who asked: see indexer.Background) and
+	// none of its cancellation.
+	OnSolve func(ctx context.Context, err error)
 	// Now is the clock the backoff of failed sign-ins counts by (nil:
 	// time.Now); the sources manager passes its own, which its tests set.
 	Now func() time.Time

@@ -217,7 +217,7 @@ func TestSolverRequestOutlivesItsAsker(t *testing.T) {
 	gate := NewSolverGate()
 	solved := make(chan error, 4)
 	asker := e.runner(t, gate)
-	asker.OnSolve = func(err error) { solved <- err }
+	asker.OnSolve = func(_ context.Context, err error) { solved <- err }
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Millisecond)
 	defer cancel()
@@ -275,7 +275,7 @@ func TestOnSolveReportsEachOutcome(t *testing.T) {
 	gate := NewSolverGate()
 	var got []error
 	r := e.runner(t, gate)
-	r.OnSolve = func(err error) { got = append(got, err) }
+	r.OnSolve = func(_ context.Context, err error) { got = append(got, err) }
 
 	e.fail.Store(true)
 	if _, err := r.Search(context.Background(), Query{Keywords: "x"}); !errors.Is(err, ErrCloudflare) {
@@ -291,7 +291,7 @@ func TestOnSolveReportsEachOutcome(t *testing.T) {
 	t.Cleanup(func() { solverCallTimeout = old })
 	e.hold()
 	slow := e.runner(t, gate)
-	slow.OnSolve = func(err error) { got = append(got, err) }
+	slow.OnSolve = func(_ context.Context, err error) { got = append(got, err) }
 	if _, err := slow.Search(context.Background(), Query{Keywords: "x"}); !errors.Is(err, ErrCloudflare) {
 		t.Fatalf("slow: err = %v", err)
 	}
@@ -302,4 +302,35 @@ func TestOnSolveReportsEachOutcome(t *testing.T) {
 		t.Fatal(err)
 	}
 	gate.release()
+}
+
+// OnSolve gets what the asker's context carried (who asked), also after the
+// asker has left, and none of its cancellation.
+func TestOnSolveGetsTheAskersValues(t *testing.T) {
+	type key struct{}
+	e := newSolverEnv(t)
+	e.hold()
+	r := e.runner(t, NewSolverGate())
+	type heard struct {
+		val      any
+		canceled bool
+	}
+	got := make(chan heard, 1)
+	r.OnSolve = func(ctx context.Context, err error) {
+		got <- heard{ctx.Value(key{}), ctx.Err() != nil}
+	}
+	ctx, cancel := context.WithTimeout(context.WithValue(context.Background(), key{}, "asker"), 40*time.Millisecond)
+	defer cancel()
+	if _, err := r.Search(ctx, Query{Keywords: "Дюна"}); !errors.Is(err, ErrCloudflare) {
+		t.Fatalf("err = %v", err)
+	}
+	e.release()
+	select {
+	case h := <-got:
+		if h.val != "asker" || h.canceled {
+			t.Fatalf("OnSolve ctx: value %v, cancelled %v", h.val, h.canceled)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("OnSolve was not called")
+	}
 }

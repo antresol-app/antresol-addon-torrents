@@ -23,8 +23,8 @@ func init() {
 		"Что-то пошло не так при обращении к сайту. Подробности — в журнале сервера.":                                                                "Something went wrong while contacting the site. Details are in the server log.",
 
 		// a source paused for a failed FlareSolverr; a search that ran out of time waiting for it
-		"Сайт закрыт защитой от ботов (Cloudflare): FlareSolverr не справился, повтор после %s. Проверьте его в разделе «Настройки → Сервер → Настройки загрузок».": "The site is behind bot protection (Cloudflare), and FlareSolverr failed; the next try is after %s. Check it in Settings → Server → Download settings.",
-		"FlareSolverr занят другими запросами, а время поиска вышло. Повторите чуть позже.":                                                                         "FlareSolverr is busy with other requests and the search ran out of time. Try again a little later.",
+		"Сайт закрыт защитой от ботов (Cloudflare): FlareSolverr не справился. Автоматические проверки возобновятся после %s; поиск, который вы запустите сами, всё равно попробует. Проверьте FlareSolverr в разделе «Настройки → Сервер → Настройки загрузок».": "The site is behind bot protection (Cloudflare), and FlareSolverr failed. Automatic checks resume after %s; a search you start yourself still tries. Check FlareSolverr in Settings → Server → Download settings.",
+		"FlareSolverr занят другими запросами, а время поиска вышло. Повторите чуть позже.": "FlareSolverr is busy with other requests and the search ran out of time. Try again a little later.",
 
 		"источник не найден":                  "torrent source not found",
 		"описание этого трекера не найдено":   "this tracker’s definition wasn’t found",

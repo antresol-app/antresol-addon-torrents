@@ -1101,6 +1101,9 @@ var metaTimeout = 60 * time.Second
 // best scored release is taken.
 func (s *Service) Acquire(ctx context.Context, req AcquireRequest) (AcquireResult, error) {
 	deadline := time.Now().Add(releaseFilesTimeout)
+	if req.Background {
+		ctx = indexer.Background(ctx) // no one waits on its searches
+	}
 	req.UserID, req.UserUID = s.asker(ctx, req.UserID, req.UserUID)
 	if req.Files != nil && (req.Kind != KindMusic || req.Mode != ModeDownload || strings.TrimSpace(req.ReleaseLink) == "" || req.Direct) {
 		return AcquireResult{}, uerr(ErrInvalid, msgFilesAlbumOnly)

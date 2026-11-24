@@ -84,6 +84,17 @@ func (c *cfEnv) search() SearchResponse {
 	return resp
 }
 
+// bgSearch is search as a background search (see Background): the tracking
+// scans, the follow rounds. search is a person's.
+func (c *cfEnv) bgSearch() SearchResponse {
+	c.t.Helper()
+	resp, err := c.m.Search(Background(context.Background()), SearchRequest{Text: "Дюна", Kind: "movie", Year: 2024})
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	return resp
+}
+
 func (c *cfEnv) source(id int64) Source {
 	c.t.Helper()
 	s, err := c.m.Get(context.Background(), id)

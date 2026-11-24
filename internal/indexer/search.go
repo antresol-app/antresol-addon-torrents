@@ -135,6 +135,11 @@ type SearchResponse struct {
 	Releases []ScoredRelease `json:"releases"`
 	Rejected []ScoredRelease `json:"rejected"`
 	Failed   []SourceError   `json:"failed"`
+	// Answered: how many sources answered (a successful search, even with no
+	// release); Failed lists those that did not. Not sent to clients: a
+	// caller that must not take «nothing found» for «nobody could look»
+	// (the tracking scan) reads it.
+	Answered int `json:"-"`
 	// Prefs: the release preferences the releases were scored by (nil
 	// from a source of no preferences).
 	Prefs *Prefs `json:"-"`
@@ -457,6 +462,8 @@ func (m *Manager) assemble(ctx context.Context, q SearchRequest, prefs Prefs, ou
 		}
 		if f.err != nil {
 			resp.Failed = append(resp.Failed, SourceError{SourceID: f.src.ID, Name: f.src.Name, Message: humanErrorIn(ctx, f.err)})
+		} else {
+			resp.Answered++
 		}
 		for _, r := range f.results {
 			if r.Link == "" && r.Magnet == "" {
@@ -651,11 +658,15 @@ func kindConfig(kind string) map[string]string {
 // Russian trackers name seasons «Сезон 1», not S01, so they get the title
 // alone and Score filters seasons; other trackers get "<title> S01" (big
 // international sites return only the first results for a long-running show).
-// A source paused for a failed FlareSolverr answers at once with that, as a
-// refused sign-in's rest does, and its status stays as the pause set it.
+// A background search (see Background) of a source paused for a failed
+// FlareSolverr answers at once with that, as a refused sign-in's rest does,
+// and its status stays as the pause set it; a search a person started tries
+// the source (its answer ends the pause, its failure changes nothing of it).
 func (m *Manager) searchSource(ctx context.Context, s Source, q SearchRequest, queries []string) ([]Result, error) {
-	if until, ok := m.solverPausedUntil(s.ID); ok {
-		return nil, &solverPausedError{until: until}
+	if IsBackground(ctx) {
+		if until, ok := m.solverPausedUntil(s.ID); ok {
+			return nil, &solverPausedError{until: until}
+		}
 	}
 	budget := m.sourceBudget(ctx, s.ID)
 	sctx, cancel := context.WithTimeout(ctx, budget)
@@ -689,6 +700,7 @@ func (m *Manager) searchSource(ctx context.Context, s Source, q SearchRequest, q
 			}
 			m.log.Info("indexer: search failed", "source", s.Name, "query", kw, "err", cardigann.RedactText(err.Error()))
 			if ok {
+				m.clearSolverPause(s.ID)
 				return results, nil // partial results are still results
 			}
 			if errors.Is(err, cardigann.ErrSolverBusy) {
@@ -702,8 +714,7 @@ func (m *Manager) searchSource(ctx context.Context, s Source, q SearchRequest, q
 				m.markFailed(s.ID)
 				return nil, err
 			}
-			err = m.pausedFailure(s.ID, err) // FlareSolverr failed: say until when
-			m.setStatus(ctx, s.ID, StatusError, humanError(err))
+			err = m.recordFailure(ctx, s.ID, err)
 			if errors.Is(err, cardigann.ErrLoginFailed) || errors.Is(err, cardigann.ErrCaptcha) {
 				m.rest(s.ID)
 			} else {
@@ -715,6 +726,7 @@ func (m *Manager) searchSource(ctx context.Context, s Source, q SearchRequest, q
 		results = append(results, res...)
 	}
 	m.markAnswered(s.ID)
+	m.clearSolverPause(s.ID)
 	m.setStatus(ctx, s.ID, StatusOK, "")
 	return results, nil
 }
