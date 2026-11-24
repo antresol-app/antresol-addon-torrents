@@ -17,7 +17,10 @@ import (
 
 // Login authenticates according to login.method (post, form, cookie, get,
 // oneurl) and, when login.test.path is set, verifies the session. Without a
-// login block it is a no-op.
+// login block it is a no-op. It always tries (the admin's test of a source
+// is how a fix is checked); a search or a download that finds no session
+// goes through signIn, which does not try again while an earlier sign-in
+// that failed is still backed off.
 func (r *Runner) Login(ctx context.Context) error {
 	if err := r.setup(); err != nil {
 		return err
@@ -27,17 +30,86 @@ func (r *Runner) Login(ctx context.Context) error {
 	}
 	r.loginMu.Lock()
 	defer r.loginMu.Unlock()
+	return r.login(ctx)
+}
+
+// login is Login under loginMu.
+func (r *Runner) login(ctx context.Context) error {
 	err := r.doLogin(ctx)
 	if err == nil {
 		err = r.verifyLogin(ctx)
 	}
 	r.mu.Lock()
 	r.loggedIn = err == nil
+	r.noteSignIn(ctx, err)
 	r.mu.Unlock()
 	if err == nil {
 		r.noteCookies()
 	}
 	return err
+}
+
+// noteSignIn keeps the outcome of a sign-in for signIn (under r.mu): a
+// failure backs the next automatic sign-in off by BackoffAfter of the
+// failures in a row, a success ends the run. A sign-in that failed because
+// its caller ran out of time says nothing of the site and is not kept, and
+// a failure that comes while the backoff lasts (a forced Login) is no new
+// one in the run.
+func (r *Runner) noteSignIn(ctx context.Context, err error) {
+	if err == nil {
+		r.loginFails, r.loginRetryAt, r.loginErr = 0, time.Time{}, nil
+		return
+	}
+	if ctx.Err() != nil {
+		return
+	}
+	now := r.clock()
+	if now.Before(r.loginRetryAt) {
+		r.loginErr = err
+		return
+	}
+	r.loginFails++
+	r.loginRetryAt, r.loginErr = now.Add(BackoffAfter(r.loginFails)), err
+}
+
+// signIn is the sign-in of a request that finds no session (a search, a
+// download, a session the site dropped): Login, unless a sign-in failed
+// lately, then its error again at once. Every refused or broken sign-in is
+// one more the tracker sees, and a source whose Cloudflare check was not
+// passed would send a request to FlareSolverr with each one.
+func (r *Runner) signIn(ctx context.Context) error {
+	if err := r.setup(); err != nil {
+		return err
+	}
+	if r.Def.Login == nil {
+		return nil
+	}
+	// the check is made under loginMu: a search that waited for the one
+	// signing in sees how that ended instead of failing the same way again
+	r.loginMu.Lock()
+	defer r.loginMu.Unlock()
+	r.mu.Lock()
+	wait, last := r.clock().Before(r.loginRetryAt), r.loginErr
+	r.mu.Unlock()
+	if wait && last != nil {
+		return last
+	}
+	return r.login(ctx)
+}
+
+// ResetSignIn ends the backoff of failed sign-ins: the next search signs in
+// again at once (the source was looked at, or its settings were saved).
+func (r *Runner) ResetSignIn() {
+	r.mu.Lock()
+	r.loginFails, r.loginRetryAt, r.loginErr = 0, time.Time{}, nil
+	r.mu.Unlock()
+}
+
+func (r *Runner) clock() time.Time {
+	if r.Now != nil {
+		return r.Now()
+	}
+	return time.Now()
 }
 
 // noteCookies keeps the session cookies of a cookie-login definition (a
@@ -87,7 +159,7 @@ func (r *Runner) ensureLogin(ctx context.Context) error {
 	if ok {
 		return nil
 	}
-	return r.Login(ctx)
+	return r.signIn(ctx)
 }
 
 func (r *Runner) doLogin(ctx context.Context) error {
@@ -489,7 +561,7 @@ func (r *Runner) fetchRelogin(ctx context.Context, req *request, needed func(*re
 	if strings.HasPrefix(resp.location, "magnet:") {
 		return resp, nil
 	}
-	if err := r.Login(ctx); err != nil {
+	if err := r.signIn(ctx); err != nil {
 		return nil, err
 	}
 	if resp, err = r.do(ctx, req); err != nil {

@@ -49,6 +49,9 @@ services:
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
     restart: unless-stopped
+    mem_limit: 1536m
+    environment:
+      - LOG_LEVEL=warning
 ```
 
 and run `docker compose up -d`. The addon finds it by its service name
@@ -56,6 +59,26 @@ and run `docker compose up -d`. The addon finds it by its service name
 **Settings → Server → Download settings → FlareSolverr** then says it was
 found next to the server, and the sources that failed are checked again. While
 it is not found, that row shows the same block.
+
+Two settings in that block matter; add them if you set FlareSolverr up
+earlier. It starts a Chrome for every request, and on a small server a few
+of them at once use all the memory: `mem_limit` makes the system stop
+FlareSolverr, not the server (raise it if FlareSolverr itself is stopped for
+lack of memory). `LOG_LEVEL=warning` keeps its log short: at the default
+`info` level it writes the body of every request it gets, and a sign-in
+request carries your password.
+
+How the addon uses it: one request goes to FlareSolverr at a time. A search
+that gives up does not cancel a request FlareSolverr already has: the next
+request waits for it (and gives up with its own search if that takes too
+long), and what the request solved is kept for the next search. When
+FlareSolverr fails on a site (it does not answer, takes too long, does not
+get through the challenge), that source is paused for 30 minutes, twice as
+long after each failure in a row up to 6 hours. Its searches answer at once
+with the time they may come back (so does the source's status on
+**Settings → Server → Sources**), and a passing check of the source, saving
+its settings or changing the FlareSolverr address ends the pause. A failed
+sign-in is likewise not repeated by every search.
 
 An address wins over the one found, in this order: the one saved in that
 field (saved once it answers), then the server's

@@ -305,15 +305,57 @@ type fsResponse struct {
 
 // solve repeats req through FlareSolverr and adopts its cookies and user agent
 // so that following requests pass the challenge directly.
+//
+// At most one request is with FlareSolverr at a time (SolverGate), and it
+// is never abandoned: the call runs on its own goroutine, detached from
+// the asker's context, and holds the slot until FlareSolverr answers (or
+// solverCallTimeout passes). FlareSolverr does not cancel a job when its
+// client leaves, so a call dropped at the asker's short deadline (a search
+// gives up after seconds, a challenge takes up to a minute) would leave a
+// browser running there while the next asker sent another, and the queue
+// would only grow. This way the asker may leave on time, but the next
+// request goes out only when the last one is over, and what the orphaned
+// call solved is still kept (the cookies of the jar), so the next search of
+// the site passes without a solve.
 func (r *Runner) solve(ctx context.Context, req *request) (*response, error) {
-	payload := map[string]any{"cmd": "request.get", "url": req.url, "maxTimeout": 60000}
-	if req.method == http.MethodPost {
-		payload["cmd"] = "request.post"
-		payload["postData"] = encodePairs(r.enc, req.form, "&")
-	}
 	target, err := url.Parse(req.url)
 	if err != nil {
 		return nil, err
+	}
+	if err := r.SolverGate.acquire(ctx); err != nil {
+		// still waiting for its turn when the asker's time ran out
+		return nil, fmt.Errorf("%w: %w: %w", ErrCloudflare, ErrSolverBusy, err)
+	}
+	// the slot is ours; the payload is made only now, so it carries the
+	// cookies an earlier solve left while this one waited
+	buf := r.solverPayload(req, target)
+	type outcome struct {
+		resp *response
+		err  error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		defer r.SolverGate.release()
+		resp, err := r.callSolver(context.WithoutCancel(ctx), buf, target)
+		if r.OnSolve != nil {
+			r.OnSolve(err) // before the slot is free: the next asker sees what this one learned
+		}
+		done <- outcome{resp, err}
+	}()
+	select {
+	case o := <-done:
+		return o.resp, o.err
+	case <-ctx.Done():
+		return nil, fmt.Errorf("%w: FlareSolverr не ответил вовремя: %w", ErrCloudflare, ctx.Err())
+	}
+}
+
+// solverPayload is the JSON of req for FlareSolverr's /v1.
+func (r *Runner) solverPayload(req *request, target *url.URL) []byte {
+	payload := map[string]any{"cmd": "request.get", "url": req.url, "maxTimeout": solverMaxTimeout.Milliseconds()}
+	if req.method == http.MethodPost {
+		payload["cmd"] = "request.post"
+		payload["postData"] = encodePairs(r.enc, req.form, "&")
 	}
 	if jar := r.client.Jar; jar != nil {
 		var cs []fsCookie
@@ -325,6 +367,12 @@ func (r *Runner) solve(ctx context.Context, req *request) (*response, error) {
 		}
 	}
 	buf, _ := json.Marshal(payload)
+	return buf
+}
+
+// callSolver sends one request to FlareSolverr and adopts the cookies and
+// the user agent of its answer. A FlareSolverr that fails is an ErrCloudflare.
+func (r *Runner) callSolver(ctx context.Context, buf []byte, target *url.URL) (*response, error) {
 	endpoint := strings.TrimRight(r.FlareSolverr, "/") + "/v1"
 	hreq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(buf))
 	if err != nil {
@@ -335,7 +383,7 @@ func (r *Runner) solve(ctx context.Context, req *request) (*response, error) {
 	if r.SolverHTTP != nil {
 		fsTransport = r.SolverHTTP.Transport
 	}
-	fsClient := &http.Client{Transport: fsTransport, Timeout: 90 * time.Second}
+	fsClient := &http.Client{Transport: fsTransport, Timeout: solverCallTimeout}
 	hresp, err := fsClient.Do(hreq)
 	if err != nil {
 		return nil, fmt.Errorf("%w: FlareSolverr недоступен: %v", ErrCloudflare, err)

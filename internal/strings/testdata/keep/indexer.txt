@@ -15,6 +15,7 @@ internal/indexer/cardigann/runner.go: %w (%s): это прямая загруз�
 internal/indexer/cardigann/request.go: %w: %s прислал слишком большой ответ (больше %d МБ)  # technical detail of ErrBadResponse: logs only
 internal/indexer/cardigann/request.go: %w: FlareSolverr недоступен: %v  # technical detail of ErrCloudflare: logs only
 internal/indexer/cardigann/request.go: %w: ответ FlareSolverr не прочитан: %v  # technical detail of ErrCloudflare: logs only
+internal/indexer/cardigann/request.go: %w: FlareSolverr не ответил вовремя: %w  # technical detail of ErrCloudflare: logs only
 internal/indexer/score.go: (?i)(?:\bseasons?|сезон\p{L}*)\s*[:#№]?\s*\d{1,2}\s*(?:,|&|\+|\band\b|и\s)\s*\d{1,2}  # regex matched in Russian release names
 internal/indexer/score.go: (?i)\bcomplete\s+series\b|все\s+сезоны|полн\p{L}*\s+сериал  # regex matched in Russian release names
 internal/indexer/score_album.go: ^(?:the )?[\p{L}\d]+ (?:album|альбом)$  # regex matched in folded release names

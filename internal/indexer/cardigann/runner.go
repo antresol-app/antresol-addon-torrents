@@ -45,6 +45,18 @@ type Runner struct {
 	// SolverHTTP reaches FlareSolverr (default: HTTP's transport). Set it
 	// when HTTP refuses the home network, where FlareSolverr usually runs.
 	SolverHTTP *http.Client
+	// SolverGate admits one FlareSolverr request at a time; share one
+	// between every runner of the process. Nil: a gate of this runner's own.
+	SolverGate *SolverGate
+	// OnSolve, when set, hears how each request to FlareSolverr ended: nil
+	// when it solved the page, else the error (an ErrCloudflare for a
+	// FlareSolverr that is unreachable, too slow or did not get through).
+	// It runs on the goroutine of the request, which may be one whose asker
+	// has gone, and before the next request is let through.
+	OnSolve func(err error)
+	// Now is the clock the backoff of failed sign-ins counts by (nil:
+	// time.Now); the sources manager passes its own, which its tests set.
+	Now func() time.Time
 	// Strict: redirects stop at 5 and never go from https to http (sources
 	// whose page content picks the next request: direct downloads).
 	Strict bool
@@ -69,6 +81,11 @@ type Runner struct {
 	userAgent string
 	lastReq   time.Time
 	loginMu   sync.Mutex
+	// the backoff of failed sign-ins (see noteSignIn): how many in a row,
+	// when the next automatic one may go, the last one's error
+	loginFails   int
+	loginRetryAt time.Time
+	loginErr     error
 	// the cookie session (login.method: cookie): the cookies of the last
 	// signed-in response, the set last reported to OnCookies or applied at
 	// sign-in (sorted name=value pairs) and when it was reported
@@ -115,6 +132,9 @@ func (r *Runner) setup() error {
 		if r.Def == nil {
 			r.setupErr = errors.New("cardigann: runner without definition")
 			return
+		}
+		if r.SolverGate == nil {
+			r.SolverGate = NewSolverGate()
 		}
 		if r.enc, r.setupErr = lookupEncoding(r.Def.Encoding); r.setupErr != nil {
 			return

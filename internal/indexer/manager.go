@@ -103,6 +103,11 @@ type Manager struct {
 	// markFailed); flakyBudget is what a quick search gives such a source
 	failing     map[int64]time.Time
 	flakyBudget time.Duration
+	// paused: sources FlareSolverr failed for, left out of searches for a
+	// while (see solverOutcome); gate lets one request at a time through to
+	// FlareSolverr for all of them
+	paused map[int64]solverPause
+	gate   *cardigann.SolverGate
 
 	// importMu serialises Prowlarr imports: their «already added» check and
 	// the insert must be one step, or two requests add a tracker twice.
@@ -129,7 +134,7 @@ func NewManager(db *sql.DB, cat *Catalog, o Options) *Manager {
 	m := &Manager{
 		db: db, cat: cat, http: o.HTTP, flareSolverr: o.FlareSolverr,
 		searchTimeout: o.SearchTimeout, testTimeout: o.TestTimeout, log: o.Logger, onStatus: o.OnStatus,
-		studios: o.Studios, flakyBudget: FlakyBudget,
+		studios: o.Studios, flakyBudget: FlakyBudget, gate: cardigann.NewSolverGate(),
 		now: time.Now, runners: map[int64]*cachedRunner{}, directHTTP: opdsHTTP,
 	}
 	if m.searchTimeout <= 0 {
@@ -435,10 +440,14 @@ func (m *Manager) FlareSolverr() string {
 }
 
 // SetFlareSolverr changes the FlareSolverr address ("" = none): the next
-// request of each source goes through it (its runner is built anew).
+// request of each source goes through it (its runner is built anew), and
+// the sources paused for the old one are asked again.
 func (m *Manager) SetFlareSolverr(url string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if url != m.flareSolverr {
+		clear(m.paused)
+	}
 	m.flareSolverr = url
 }
 
@@ -484,6 +493,7 @@ func (m *Manager) Test(ctx context.Context, id int64) error {
 	}
 	if err != nil {
 		m.log.Info("indexer: source test failed", "source", s.Name, "err", cardigann.RedactText(err.Error()))
+		err = m.pausedFailure(id, err) // the test may have paused the source: say until when
 		m.setStatus(ctx, id, StatusError, humanError(err))
 		return humanize("", err)
 	}
@@ -509,12 +519,16 @@ func (m *Manager) rest(id int64) {
 }
 
 // wake ends the rest of source id, and what is held against it for a
-// failed search.
+// failed search, a FlareSolverr that failed on it or a failed sign-in.
 func (m *Manager) wake(id int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.resting, id)
 	delete(m.failing, id)
+	delete(m.paused, id)
+	if c, ok := m.runners[id]; ok {
+		c.runner.ResetSignIn()
+	}
 }
 
 // FlakyBudget is how long a quick search (WithSettle) waits for a source
@@ -620,8 +634,11 @@ func (m *Manager) runner(s Source) (*cardigann.Runner, error) {
 	}
 	r := &cardigann.Runner{
 		Def: def, Settings: maps.Clone(s.Settings), HTTP: m.http,
-		FlareSolverr: m.flareSolverr, Logger: m.log,
+		FlareSolverr: m.flareSolverr, Logger: m.log, SolverGate: m.gate,
 	}
+	r.Now = func() time.Time { return m.now() }
+	id := s.ID
+	r.OnSolve = func(err error) { m.solverOutcome(id, r, err) }
 	if def.Download != nil && def.Download.Direct {
 		// the site's pages choose the next requests and the response is
 		// saved into the library: no home network (unless the admin allows
@@ -630,7 +647,6 @@ func (m *Manager) runner(s Source) (*cardigann.Runner, error) {
 		r.HTTP, r.SolverHTTP, r.Strict = m.directHTTP(s), m.http, true
 	}
 	if def.Login != nil && def.Login.Method == "cookie" {
-		id := s.ID
 		r.OnCookies = func(cookie string) { m.saveSessionCookie(id, r, cookie) }
 	}
 	m.runners[s.ID] = &cachedRunner{key: key, def: def, runner: r, settings: maps.Clone(s.Settings)}

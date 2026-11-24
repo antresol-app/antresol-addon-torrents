@@ -651,7 +651,12 @@ func kindConfig(kind string) map[string]string {
 // Russian trackers name seasons «Сезон 1», not S01, so they get the title
 // alone and Score filters seasons; other trackers get "<title> S01" (big
 // international sites return only the first results for a long-running show).
+// A source paused for a failed FlareSolverr answers at once with that, as a
+// refused sign-in's rest does, and its status stays as the pause set it.
 func (m *Manager) searchSource(ctx context.Context, s Source, q SearchRequest, queries []string) ([]Result, error) {
+	if until, ok := m.solverPausedUntil(s.ID); ok {
+		return nil, &solverPausedError{until: until}
+	}
 	budget := m.sourceBudget(ctx, s.ID)
 	sctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
@@ -686,12 +691,18 @@ func (m *Manager) searchSource(ctx context.Context, s Source, q SearchRequest, q
 			if ok {
 				return results, nil // partial results are still results
 			}
+			if errors.Is(err, cardigann.ErrSolverBusy) {
+				// it waited for FlareSolverr's turn and its time ran out:
+				// nothing was asked of the site, nothing is known of it
+				return nil, err
+			}
 			if budget < m.searchTimeout && sctx.Err() != nil {
 				// a flaky source cut short by the quick budget: still not
 				// answering, but not shown as broken for that alone
 				m.markFailed(s.ID)
 				return nil, err
 			}
+			err = m.pausedFailure(s.ID, err) // FlareSolverr failed: say until when
 			m.setStatus(ctx, s.ID, StatusError, humanError(err))
 			if errors.Is(err, cardigann.ErrLoginFailed) || errors.Is(err, cardigann.ErrCaptcha) {
 				m.rest(s.ID)

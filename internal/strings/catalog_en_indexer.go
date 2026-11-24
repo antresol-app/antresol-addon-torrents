@@ -21,6 +21,11 @@ func init() {
 		"Сайт вернул не торрент-файл. Возможно, нужно войти заново.":                                                                                 "The site didn’t return a torrent file. You may need to sign in again.",
 		"Сайт ответил не так, как ожидалось. Возможно, он изменился или временно сломан.":                                                            "The site responded unexpectedly. It may have changed or be temporarily broken.",
 		"Что-то пошло не так при обращении к сайту. Подробности — в журнале сервера.":                                                                "Something went wrong while contacting the site. Details are in the server log.",
+
+		// a source paused for a failed FlareSolverr; a search that ran out of time waiting for it
+		"Сайт закрыт защитой от ботов (Cloudflare): FlareSolverr не справился, повтор после %s. Проверьте его в разделе «Настройки → Сервер → Настройки загрузок».": "The site is behind bot protection (Cloudflare), and FlareSolverr failed; the next try is after %s. Check it in Settings → Server → Download settings.",
+		"FlareSolverr занят другими запросами, а время поиска вышло. Повторите чуть позже.":                                                                         "FlareSolverr is busy with other requests and the search ran out of time. Try again a little later.",
+
 		"источник не найден":                  "torrent source not found",
 		"описание этого трекера не найдено":   "this tracker’s definition wasn’t found",
 		"файл трекера не читается: %w":        "the tracker file can’t be read: %w",
@@ -32,6 +37,7 @@ func init() {
 		"не удалось войти на сайт":                  "couldn’t sign in to the site",
 		"сайт просит ввести капчу":                  "the site asks for a captcha",
 		"сайт закрыт защитой от ботов (Cloudflare)": "the site is behind bot protection (Cloudflare)",
+		"FlareSolverr занят другим запросом":        "FlareSolverr is busy with another request",
 		"сайт недоступен":                           "the site is unavailable",
 		"сайт вернул не торрент-файл":               "the site didn’t return a torrent file",
 		"сайт ответил не так, как ожидалось":        "the site responded unexpectedly",

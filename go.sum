@@ -87,8 +87,8 @@ github.com/andybalholm/brotli v1.2.2 h1:HzTuoo2ErYQqf5qvcJInB8uvqSVxRttzkFexPWtn
 github.com/andybalholm/brotli v1.2.2/go.mod h1:rzTDkvFWvIrjDXZHkuS16NPggd91W3kUSvPlQ1pLaKY=
 github.com/andybalholm/cascadia v1.3.4 h1:vM2lgh0Vru9Vwyfm4cQqWP2HHMW0u0+2PAW7Q38Qufg=
 github.com/andybalholm/cascadia v1.3.4/go.mod h1:BLRmbRjpEtNKieZOCCvYj4RqN+KRA41GBe/5O+G93kM=
-github.com/antresol-app/antresol/addonkit v0.3.4 h1:SXI8gSSoDmH59CRhRvzahkdzpGc/eeRL9V1ckFbMwiI=
-github.com/antresol-app/antresol/addonkit v0.3.4/go.mod h1:2mJMfHd3wMAF8TgGMtsikRcOtmH4vZ6tsDN6ts2XJ7E=
+github.com/antresol-app/antresol/addonkit v0.3.5 h1:rvSaEEveGmek8fnhp3001I7wCs+VLrNk77wy0aWsBbs=
+github.com/antresol-app/antresol/addonkit v0.3.5/go.mod h1:2mJMfHd3wMAF8TgGMtsikRcOtmH4vZ6tsDN6ts2XJ7E=
 github.com/apache/thrift v0.12.0/go.mod h1:cp2SuWMxlEZw2r+iP2GNCdIi4C1qmUzdZFSVb+bacwQ=
 github.com/bahlo/generic-list-go v0.2.0 h1:5sz/EEAK+ls5wF+NeqDpk5+iNdMDXrh3z3nPnH1Wvgk=
 github.com/bahlo/generic-list-go v0.2.0/go.mod h1:2KvAjgMlE5NNynlg/5iLrrCCZ2+5xWbdbCW3pNTGyYg=
