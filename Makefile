@@ -22,6 +22,8 @@ CORE_DETECTED := $(shell top=$$(git rev-parse --show-toplevel 2>/dev/null) && [ 
 ANTRESOL_CORE ?= $(CORE_DETECTED)
 ANTRESOL_ADDON_SDK ?=
 PLATFORMS := linux/amd64 linux/arm64 darwin/arm64
+# writes the release manifest (the addonkit version of go.mod's require)
+MANIFEST := github.com/antresol-app/antresol/addonkit/cmd/manifest
 HOST := $(shell GOENV=off go env GOOS)/$(shell GOENV=off go env GOARCH)
 
 # a static, reproducible binary: no GOFLAGS or go env settings of a
@@ -43,13 +45,13 @@ build: web
 	rm -rf dist build && mkdir -p dist
 	$(foreach p,$(PLATFORMS),$(call pack,$(p),dist))
 	$(call targz,web/dist/web,.,644,dist/$(ID)-web.tar.gz)
-	go run ./tools/manifest -src antresol-addon.json -dir dist $(if $(TAG),-tag $(TAG))
+	go run $(MANIFEST) -src antresol-addon.json -dir dist $(if $(TAG),-tag $(TAG))
 
 local: web
 	rm -rf dist-local/$(ID) build && mkdir -p dist-local/$(ID)
 	$(call pack,$(HOST),dist-local/$(ID))
 	$(call targz,web/dist/web,.,644,dist-local/$(ID)/$(ID)-web.tar.gz)
-	go run ./tools/manifest -src antresol-addon.json -dir dist-local/$(ID)
+	go run $(MANIFEST) -src antresol-addon.json -dir dist-local/$(ID)
 
 test:
 	go vet ./...

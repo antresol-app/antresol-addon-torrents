@@ -10,15 +10,14 @@ package migrateapi
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"io"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/i18n"
 	mediaimport "github.com/antresol-app/antresol-addon-torrents/internal/corecopy/mediaimport/runkit"
+	"github.com/antresol-app/antresol-addon-torrents/internal/httpx"
 	"github.com/antresol-app/antresol-addon-torrents/internal/migrate"
 	"github.com/antresol-app/antresol/addonkit"
 )
@@ -58,24 +57,6 @@ func (h *api) log() *slog.Logger {
 
 const notScannedMsg = "Медиатека ещё сканируется — подождите"
 
-// writeErr writes {"error": msg} with msg (Russian) in the request's language.
-func writeErr(w http.ResponseWriter, r *http.Request, code int, msg string) {
-	addonkit.WriteError(w, code, i18n.Localize(r.Context(), msg))
-}
-
-// decode reads a JSON body (at most 1 MiB); false: a 400 is written.
-func decode(w http.ResponseWriter, r *http.Request, v any) bool {
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-	if err == nil {
-		err = json.Unmarshal(body, v)
-	}
-	if err != nil {
-		writeErr(w, r, http.StatusBadRequest, "Неверный запрос")
-		return false
-	}
-	return true
-}
-
 func (h *api) ready(ctx context.Context) (bool, string) {
 	ok, reason := h.d.Migrate.Ready(ctx)
 	switch {
@@ -92,7 +73,7 @@ func (h *api) err(w http.ResponseWriter, r *http.Request, what string, err error
 	case r.Context().Err() != nil:
 		return // the client went away
 	case errors.Is(err, migrate.ErrNeedsDryRun):
-		writeErr(w, r, http.StatusConflict, "Сначала проверьте, что будет перенесено")
+		httpx.WriteErr(w, r, http.StatusConflict, "Сначала проверьте, что будет перенесено")
 	case errors.Is(err, migrate.ErrNotReady):
 		// asked again for the reason: ready meanwhile still answers the
 		// refusal's own text, never an empty one
@@ -100,38 +81,38 @@ func (h *api) err(w http.ResponseWriter, r *http.Request, what string, err error
 		if reason == "" {
 			reason = notScannedMsg
 		}
-		writeErr(w, r, http.StatusConflict, reason)
+		httpx.WriteErr(w, r, http.StatusConflict, reason)
 	case errors.Is(err, migrate.ErrBusy):
-		writeErr(w, r, http.StatusConflict, "Перенос уже идёт")
+		httpx.WriteErr(w, r, http.StatusConflict, "Перенос уже идёт")
 	case errors.Is(err, migrate.ErrUnknownSource):
-		writeErr(w, r, http.StatusBadRequest, "Неизвестный источник")
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Неизвестный источник")
 	case errors.Is(err, migrate.ErrNoSources):
-		writeErr(w, r, http.StatusBadRequest, "Выберите, что перенести")
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Выберите, что перенести")
 	case errors.Is(err, migrate.ErrNotFound):
-		writeErr(w, r, http.StatusNotFound, "Отчёт не найден")
+		httpx.WriteErr(w, r, http.StatusNotFound, "Отчёт не найден")
 	case errors.Is(err, migrate.ErrNothingToRollback):
-		writeErr(w, r, http.StatusConflict, "В этом отчёте нет перенесённых раздач")
+		httpx.WriteErr(w, r, http.StatusConflict, "В этом отчёте нет перенесённых раздач")
 	case errors.Is(err, migrate.ErrRolledBack):
-		writeErr(w, r, http.StatusConflict, "Раздачи из этого переноса уже возвращены")
+		httpx.WriteErr(w, r, http.StatusConflict, "Раздачи из этого переноса уже возвращены")
 	case errors.Is(err, migrate.ErrNoQBConnection):
-		writeErr(w, r, http.StatusConflict, "Чтобы вернуть раздачи, подключите qBittorrent заново: «Подключить» на его карточке (связь не переживает «Забыть» и перезапуск)")
+		httpx.WriteErr(w, r, http.StatusConflict, "Чтобы вернуть раздачи, подключите qBittorrent заново: «Подключить» на его карточке (связь не переживает «Забыть» и перезапуск)")
 	case errors.Is(err, migrate.ErrArrNotStopped):
-		writeErr(w, r, http.StatusBadRequest, "Сначала остановите Sonarr и Radarr")
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Сначала остановите Sonarr и Radarr")
 	case errors.Is(err, migrate.ErrCountChanged):
-		writeErr(w, r, http.StatusConflict, "Число загрузок изменилось — проверьте ещё раз")
+		httpx.WriteErr(w, r, http.StatusConflict, "Число загрузок изменилось — проверьте ещё раз")
 	case errors.Is(err, migrate.ErrSwitchBlocked):
 		var b *migrate.BlockedError
 		errors.As(err, &b)
 		addonkit.WriteError(w, http.StatusConflict, i18n.T(r.Context(), "Сейчас включать рано — %s", i18n.Localize(r.Context(), b.Reason)))
 	case errors.Is(err, migrate.ErrNoFollow):
-		writeErr(w, r, http.StatusConflict, "Для слежения нужен ключ TMDB")
+		httpx.WriteErr(w, r, http.StatusConflict, "Для слежения нужен ключ TMDB")
 	case errors.Is(err, migrate.ErrUnknownRemote):
-		writeErr(w, r, http.StatusBadRequest, "Неизвестный источник")
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Неизвестный источник")
 	case errors.Is(err, migrate.ErrMounted):
-		writeErr(w, r, http.StatusConflict, "Файлы этого сервиса смонтированы — они и используются")
+		httpx.WriteErr(w, r, http.StatusConflict, "Файлы этого сервиса смонтированы — они и используются")
 	default:
 		h.log().Error("torrents: "+what, "err", err)
-		writeErr(w, r, http.StatusInternalServerError, "Внутренняя ошибка сервера")
+		httpx.WriteErr(w, r, http.StatusInternalServerError, "Внутренняя ошибка сервера")
 	}
 }
 
@@ -219,7 +200,7 @@ const msgNoAdminUID = "Сервер не назвал профиль админ�
 
 func (h *api) run(w http.ResponseWriter, r *http.Request) {
 	var req mediaimport.RunRequest
-	if !decode(w, r, &req) {
+	if !httpx.Decode(w, r, &req) {
 		return
 	}
 	// the admin's id and uid, from X-Antresol-User: the run's AddedBy (its
@@ -230,7 +211,7 @@ func (h *api) run(w http.ResponseWriter, r *http.Request) {
 		req.AdminID, uid = u.ID, u.UID
 	}
 	if !req.DryRun && uid == "" {
-		writeErr(w, r, http.StatusForbidden, msgNoAdminUID)
+		httpx.WriteErr(w, r, http.StatusForbidden, msgNoAdminUID)
 		return
 	}
 	id, err := h.d.Migrate.StartAs(r.Context(), req, uid)
@@ -303,7 +284,7 @@ func (h *api) doSwitch(w http.ResponseWriter, r *http.Request) {
 		Confirm    int  `json:"confirm"`
 		ArrStopped bool `json:"arrStopped"`
 	}
-	if !decode(w, r, &req) {
+	if !httpx.Decode(w, r, &req) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), switchTimeout)
@@ -331,7 +312,7 @@ func (h *api) connect(w http.ResponseWriter, r *http.Request) {
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
-	if !decode(w, r, &req) {
+	if !httpx.Decode(w, r, &req) {
 		return
 	}
 	id := r.PathValue("id")
@@ -340,7 +321,7 @@ func (h *api) connect(w http.ResponseWriter, r *http.Request) {
 	detail, err := h.d.Migrate.Connect(ctx, id, migrate.Remote{URL: req.URL, APIKey: req.APIKey, Username: req.Username, Password: req.Password})
 	var re *migrate.RemoteError
 	if errors.As(err, &re) {
-		writeErr(w, r, http.StatusBadRequest, re.Msg)
+		httpx.WriteErr(w, r, http.StatusBadRequest, re.Msg)
 		return
 	}
 	if err != nil {

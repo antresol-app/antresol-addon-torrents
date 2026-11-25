@@ -19,7 +19,7 @@ import (
 
 	"github.com/antresol-app/antresol-addon-torrents/internal/acquire"
 	"github.com/antresol-app/antresol-addon-torrents/internal/coreadapt"
-	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/i18n"
+	"github.com/antresol-app/antresol-addon-torrents/internal/httpx"
 	"github.com/antresol-app/antresol-addon-torrents/internal/torrent"
 	"github.com/antresol-app/antresol/addonkit"
 )
@@ -52,25 +52,23 @@ type Deps struct {
 // the proxy already).
 func Register(mux *http.ServeMux, d Deps) {
 	h := &handlers{d}
-	mux.Handle("POST /api/watch/{ih}/{idx}", adults(http.HandlerFunc(h.watch)))
-	mux.Handle("GET /api/torrents/{ih}/status", adults(http.HandlerFunc(h.status)))
+	mux.Handle("POST /api/watch/{ih}/{idx}", httpx.Adults(http.HandlerFunc(h.watch)))
+	mux.Handle("GET /api/torrents/{ih}/status", httpx.Adults(http.HandlerFunc(h.status)))
 }
 
 type handlers struct{ Deps }
 
-// adults lets signed-in adult profiles through, in their language.
-func adults(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		u, ok := addonkit.UserFrom(r)
-		if !ok || u.IsKid {
-			writeErr(w, r, http.StatusForbidden, "Недоступно в детском профиле")
-			return
-		}
-		if u.Lang != "" {
-			r = r.WithContext(i18n.WithLanguage(r.Context(), u.Lang))
-		}
-		next.ServeHTTP(w, r)
-	})
+// acquireErr answers a service error as the other APIs do; a torrent or a
+// file the engine lacks (an error with no message of its own) is a 404.
+func acquireErr(w http.ResponseWriter, r *http.Request, what string, err error) {
+	if r.Context().Err() != nil {
+		return
+	}
+	if _, ok := acquire.UserMessage(err); !ok && errors.Is(err, acquire.ErrNotFound) {
+		httpx.WriteErr(w, r, http.StatusNotFound, "Файл не найден")
+		return
+	}
+	httpx.AcquireErr(w, r, "watch", what, err)
 }
 
 // validIH: ih is an infohash (40 hex characters, lowered).
@@ -81,7 +79,7 @@ func params(w http.ResponseWriter, r *http.Request) (string, int, bool) {
 	ih := strings.ToLower(r.PathValue("ih"))
 	idx, err := strconv.Atoi(r.PathValue("idx"))
 	if !validIH(ih) || err != nil || idx < 0 {
-		writeErr(w, r, http.StatusNotFound, "Файл не найден")
+		httpx.WriteErr(w, r, http.StatusNotFound, "Файл не найден")
 		return "", 0, false
 	}
 	return ih, idx, true
@@ -152,11 +150,11 @@ func WriteError(w http.ResponseWriter, r *http.Request, what string, err error) 
 	var in errInput
 	switch {
 	case errors.Is(err, errRemoved):
-		writeErr(w, r, http.StatusNotFound, "Раздача не найдена")
+		httpx.WriteErr(w, r, http.StatusNotFound, "Раздача не найдена")
 	case errors.As(err, &in):
 		if r.Context().Err() == nil {
 			slog.Warn(what+": register input", "infohash", in.ih, "idx", in.idx, "err", in.err)
-			writeErr(w, r, http.StatusBadGateway, "Не удалось открыть видео")
+			httpx.WriteErr(w, r, http.StatusBadGateway, "Не удалось открыть видео")
 		}
 	default:
 		acquireErr(w, r, what, err)
@@ -318,41 +316,4 @@ func (in *Inputs) Drop(ih string) {
 	if len(ids) > 0 {
 		in.dropLater("watch: drop the input of a removed download", ids...)
 	}
-}
-
-// writeErr writes {"error": msg} (Russian) in the request's language.
-func writeErr(w http.ResponseWriter, r *http.Request, code int, msg string) {
-	addonkit.WriteError(w, code, i18n.Localize(r.Context(), msg))
-}
-
-// acquireErr answers a service error: its message with the status of its
-// kind (not found 404, unavailable 503, no files 422), anything else 500.
-func acquireErr(w http.ResponseWriter, r *http.Request, what string, err error) {
-	if r.Context().Err() != nil {
-		return
-	}
-	msg, ok := acquire.UserMessage(err)
-	if !ok && errors.Is(err, acquire.ErrNotFound) {
-		msg, ok = "Файл не найден", true
-	}
-	if !ok {
-		slog.Warn("watch: "+what, "err", err)
-		writeErr(w, r, http.StatusInternalServerError, "Внутренняя ошибка сервера")
-		return
-	}
-	code := http.StatusInternalServerError
-	switch {
-	case errors.Is(err, acquire.ErrNotFound):
-		code = http.StatusNotFound
-	case errors.Is(err, acquire.ErrInvalid):
-		code = http.StatusBadRequest
-	case errors.Is(err, acquire.ErrUnavailable):
-		code = http.StatusServiceUnavailable
-	case errors.Is(err, acquire.ErrNoFiles):
-		code = http.StatusUnprocessableEntity
-	}
-	if code >= 500 {
-		slog.Warn("watch: "+what, "err", err)
-	}
-	writeErr(w, r, code, msg)
 }

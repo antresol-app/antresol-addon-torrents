@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/antresol-app/antresol-addon-torrents/internal/acquire"
+	"github.com/antresol-app/antresol-addon-torrents/internal/httpx"
 	"github.com/antresol-app/antresol-addon-torrents/internal/torrent"
 	"github.com/antresol-app/antresol/addonkit"
 )
@@ -12,12 +13,12 @@ import (
 // year, aliases, direct} → the release's files for «Выбрать релиз…».
 func (h *handlers) releaseFiles(w http.ResponseWriter, r *http.Request) {
 	var req acquire.ReleaseFilesRequest
-	if !decode(w, r, &req) {
+	if !httpx.Decode(w, r, &req) {
 		return
 	}
 	res, err := h.Acquire.ReleaseFiles(r.Context(), req)
 	if err != nil {
-		acquireErr(w, r, "release files", err)
+		httpx.AcquireErr(w, r, "find", "release files", err)
 		return
 	}
 	addonkit.WriteJSON(w, http.StatusOK, res)

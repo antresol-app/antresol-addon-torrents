@@ -243,7 +243,7 @@ func (r *Runner) searchRequest(sp *SearchPath, vars map[string]any, headers map[
 // parseResults dispatches on response.type (CardigannParser.ParseResponse).
 func (r *Runner) parseResults(resp *response, sp *SearchPath, vars map[string]any) ([]Result, error) {
 	text := r.text(resp)
-	if err := r.checkSearchErrors(text, vars); err != nil {
+	if err := r.checkSearchErrors(resp, vars); err != nil {
 		return nil, err
 	}
 	typ := "html"
@@ -253,15 +253,23 @@ func (r *Runner) parseResults(resp *response, sp *SearchPath, vars map[string]an
 	if typ == "json" {
 		return r.parseJSON(text, resp.url, sp, vars)
 	}
+	if typ != "xml" && len(r.Def.Search.PreprocessingFilters) == 0 {
+		// the tree the error check built, not a third one
+		doc, err := r.htmlDoc(resp)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrBadResponse, err)
+		}
+		return r.parseRows(doc, resp.url, vars)
+	}
 	return r.parseDOM(text, typ == "xml", resp.url, vars)
 }
 
-func (r *Runner) checkSearchErrors(text string, vars map[string]any) error {
+func (r *Runner) checkSearchErrors(resp *response, vars map[string]any) error {
 	errs := r.Def.Search.Error
 	if len(errs) == 0 {
 		return nil
 	}
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(text))
+	doc, err := r.htmlDoc(resp)
 	if err != nil {
 		return nil
 	}
@@ -276,7 +284,7 @@ func (r *Runner) checkSearchErrors(text string, vars map[string]any) error {
 				msg = m
 			}
 		}
-		return fmt.Errorf("%w: %s", ErrBadResponse, strings.Join(strings.Fields(msg), " "))
+		return fmt.Errorf("%w: %s", ErrBadResponse, pageMessage(msg))
 	}
 	return nil
 }
@@ -300,6 +308,14 @@ func (r *Runner) parseDOM(text string, isXML bool, pageURL *url.URL, vars map[st
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrBadResponse, err)
 	}
+	return r.parseRows(doc, pageURL, vars)
+}
+
+// parseRows reads the result rows of a page's tree (it merges rows of the
+// tree where the definition says so: the tree is not used afterwards).
+func (r *Runner) parseRows(doc *goquery.Document, pageURL *url.URL, vars map[string]any) ([]Result, error) {
+	s := &r.Def.Search
+	env := r.filterEnv(vars)
 	rowsSel, err := renderTemplate(s.Rows.Selector.Selector, vars, nil)
 	if err != nil {
 		return nil, err
@@ -320,6 +336,7 @@ func (r *Runner) parseDOM(text string, isXML bool, pageURL *url.URL, vars map[st
 		}
 		rows = merged
 	}
+	rows = rows[:min(len(rows), maxRows)]
 	var out []Result
 	for _, row := range rows {
 		res, err := r.parseRow(vars, pageURL, false, func(sel *Selector, required bool) (string, bool, error) {
@@ -394,7 +411,7 @@ func (r *Runner) parseJSON(text string, pageURL *url.URL, sp *SearchPath, vars m
 		return nil, fmt.Errorf("%w: нет списка результатов %q", ErrBadResponse, path)
 	}
 	var out []Result
-	for _, row := range arr {
+	for _, row := range arr[:min(len(arr), maxRows)] {
 		if _, ok := jsonFieldSelector(row, rowSel[len(path):]); !ok {
 			continue
 		}

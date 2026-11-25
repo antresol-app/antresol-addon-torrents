@@ -13,7 +13,7 @@ import type { Release, ReleaseProgress, ReleaseSearch } from '../types'
 import { tr, useT, type Key } from '../i18n'
 import styles from './ReleaseTable.module.css'
 
-const { BadgeLabel, Button } = ui
+const { Badge, BadgeLabel, Button, Spinner } = ui
 
 export interface ReleaseTableProps {
   kind: string
@@ -178,24 +178,24 @@ function Row({ r, busy, onPick, video, mode, onPickTracks, tracksOnly, readOnly,
         </p>
         <p className={styles.meta}>
           {r.lang && (
-            <span className={styles.lang} title={langName(r.lang)}>
+            <Badge tone="strong" title={langName(r.lang)}>
               {langBadge(r)}
-            </span>
+            </Badge>
           )}
           {r.audioFormat && (
-            <span className={`${styles.lang} ${r.formatMismatch ? styles.mismatch : ''}`} title={r.formatMismatch ? t('comp.release.formatMismatch') : t('comp.release.format')}>
+            <Badge tone={r.formatMismatch ? 'warning' : 'strong'} title={r.formatMismatch ? t('comp.release.formatMismatch') : t('comp.release.format')}>
               {r.audioFormat}
-            </span>
+            </Badge>
           )}
           {video && r.studios?.length ? (
-            <span className={styles.lang} title={t('comp.release.studios', { names: r.studios.join(', ') })}>
+            <Badge tone="strong" title={t('comp.release.studios', { names: r.studios.join(', ') })}>
               {r.studios[0]}
-            </span>
+            </Badge>
           ) : null}
           {(video ? videoTags(r) : tags(r)).map((tag) => (
-            <span key={tag} className={styles.tag}>
+            <Badge key={tag}>
               <BadgeLabel text={tag} />
-            </span>
+            </Badge>
           ))}
           <span>{r.sourceName}</span>
         </p>
@@ -292,7 +292,7 @@ export function ReleaseTable({ tmdbId, kind, extId, title, artist, year, aliases
       <div className={styles.table}>
         {bestRow}
         <div className={styles.state} role="status">
-          <span className={styles.spinner} aria-hidden />
+          <Spinner track className={styles.spinner} />
           {t('comp.release.searching')}
         </div>
       </div>
@@ -330,7 +330,7 @@ export function ReleaseTable({ tmdbId, kind, extId, title, artist, year, aliases
       </p>
       {pending.length > 0 && (
         <p className={styles.pending} aria-live="off">
-          <span className={styles.miniSpinner} aria-hidden />
+          <Spinner track className={styles.miniSpinner} />
           {t('comp.release.pending', { names: [...new Set(pending.map((p) => p.name))].join(', ') })}
         </p>
       )}

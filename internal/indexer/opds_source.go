@@ -103,7 +103,7 @@ func (m *Manager) testOPDS(ctx context.Context, s Source) error {
 		if tctx.Err() != nil {
 			err = fmt.Errorf("%w: %w", errSourceTimeout, err)
 		}
-		m.log.Info("indexer: OPDS source test failed", "source", s.Name, "err", err)
+		m.log.Info("indexer: OPDS source test failed", "source", s.Name, "err", cardigann.RedactText(err.Error()))
 		m.setStatus(ctx, s.ID, StatusError, humanError(err))
 		return humanize("", err)
 	}
@@ -155,7 +155,7 @@ func (m *Manager) searchOPDS(ctx context.Context, s Source, q SearchRequest, que
 			if sctx.Err() != nil {
 				err = fmt.Errorf("%w: %w", errSourceTimeout, err)
 			}
-			m.log.Info("indexer: OPDS search failed", "source", s.Name, "query", kw, "err", err)
+			m.log.Info("indexer: OPDS search failed", "source", s.Name, "query", kw, "err", cardigann.RedactText(err.Error()))
 			if ok {
 				return results, tags, nil
 			}
@@ -165,7 +165,7 @@ func (m *Manager) searchOPDS(ctx context.Context, s Source, q SearchRequest, que
 		ok = true
 		for _, e := range entries {
 			l, found := opds.Best(e.Links, order)
-			if _, dup := tags[l.Href]; !found || dup || (!sameHost(l.Href, host) && !sameHost(l.Href, catHost)) {
+			if _, dup := tags[l.Href]; !found || dup || (!cardigann.HostOnSite([]string{l.Href}, host, false) && !cardigann.HostOnSite([]string{l.Href}, catHost, false)) {
 				continue // Fetch would refuse a link to another site
 			}
 			title := e.Title
@@ -182,11 +182,6 @@ func (m *Manager) searchOPDS(ctx context.Context, s Source, q SearchRequest, que
 	}
 	m.setStatus(ctx, s.ID, StatusOK, "")
 	return results, tags, nil
-}
-
-func sameHost(link, host string) bool {
-	u, err := url.Parse(link)
-	return err == nil && host != "" && strings.EqualFold(u.Hostname(), host)
 }
 
 // scoreDirect rates a direct download as ScoreMedia rates a torrent of the
@@ -227,7 +222,7 @@ func (m *Manager) catalogHost(ctx context.Context, s Source) string {
 	defer cancel()
 	h, err := opdsClient(s).CatalogHost(tctx)
 	if err != nil {
-		m.log.Info("indexer: OPDS catalog host", "source", s.Name, "err", err)
+		m.log.Info("indexer: OPDS catalog host", "source", s.Name, "err", cardigann.RedactText(err.Error()))
 		return ""
 	}
 	rememberCatalogHost(s, h)
@@ -310,7 +305,7 @@ func (m *Manager) fetchCardigann(ctx context.Context, s Source, link string) (io
 		return nil, FetchInfo{}, err
 	}
 	u, err := url.Parse(strings.TrimSpace(link))
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || !siteHost(def.Links, s.Settings["sitelink"], u.Hostname()) {
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || !cardigann.HostOnSite(append([]string{s.Settings["sitelink"]}, def.Links...), u.Hostname(), false) {
 		return nil, FetchInfo{}, errForeignLink
 	}
 	r, err := m.runner(s)
@@ -331,16 +326,6 @@ func (m *Manager) fetchCardigann(ctx context.Context, s Source, link string) (io
 	}
 	info := FetchInfo{Name: fetchName(resp, resp.Request.URL), ContentType: mediaTypeOf(resp.Header.Get("Content-Type")), Size: resp.ContentLength}
 	return &limitedBody{r: resp.Body, left: maxDirectBytes, cancel: cancel}, info, nil
-}
-
-// siteHost: host is the host of one of links or of the mirror sitelink.
-func siteHost(links []string, sitelink, host string) bool {
-	for _, l := range append([]string{sitelink}, links...) {
-		if u, err := url.Parse(strings.TrimSpace(l)); err == nil && u.Hostname() != "" && strings.EqualFold(u.Hostname(), host) {
-			return true
-		}
-	}
-	return false
 }
 
 // fetchName is the file name of a download: Content-Disposition, else the

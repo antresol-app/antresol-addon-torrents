@@ -286,6 +286,8 @@ func TestArrAPICheck(t *testing.T) {
 		{"Sonarr", Remote{URL: radarr.URL, APIKey: fakeAPIKey}, "отвечает Radarr, а не Sonarr"},
 		{"Sonarr", Remote{URL: "", APIKey: fakeAPIKey}, "Укажите адрес Sonarr"},
 		{"Sonarr", Remote{URL: "sonarr:8989", APIKey: fakeAPIKey}, "Адрес Sonarr должен начинаться с http:// или https://"},
+		{"Sonarr", Remote{URL: "http://169.254.169.254/", APIKey: fakeAPIKey}, "Адрес Sonarr не может быть link-local адресом"},
+		{"Sonarr", Remote{URL: "http://[fe80::1]:8989", APIKey: fakeAPIKey}, "Адрес Sonarr не может быть link-local адресом"},
 		{"Sonarr", Remote{URL: sonarr.URL}, "Укажите API-ключ Sonarr"},
 		{"Sonarr", Remote{URL: "http://127.0.0.1:1", APIKey: fakeAPIKey}, "Sonarr не отвечает по адресу http://127.0.0.1:1"},
 		{"Prowlarr", Remote{URL: sonarr.URL, APIKey: fakeAPIKey}, "По адресу " + sonarr.URL + " нет API Prowlarr — проверьте адрес"},

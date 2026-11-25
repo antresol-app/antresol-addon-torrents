@@ -46,14 +46,36 @@ type directJob struct {
 	completed *time.Time
 }
 
-// maxDirectAtOnce direct downloads run at once; more wait (queued).
-const maxDirectAtOnce = 3
+// maxDirectAtOnce direct downloads run at once; more wait (queued), up to
+// maxDirectQueued of them: a request past that is refused.
+const (
+	maxDirectAtOnce = 3
+	maxDirectQueued = 20
+)
 
 // directJobs are the service's direct downloads.
 type directJobs struct {
-	mu    sync.Mutex
-	jobs  map[string]*directJob
-	slots chan struct{}
+	mu     sync.Mutex
+	jobs   map[string]*directJob
+	slots  chan struct{}
+	queued int // jobs waiting for a slot
+}
+
+// enqueue counts one more job waiting for a slot; false: the queue is full.
+func (d *directJobs) enqueue() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.queued >= maxDirectQueued {
+		return false
+	}
+	d.queued++
+	return true
+}
+
+func (d *directJobs) dequeue() {
+	d.mu.Lock()
+	d.queued--
+	d.mu.Unlock()
 }
 
 func (d *directJobs) slotsChan() chan struct{} {
@@ -151,7 +173,16 @@ func (j *directJob) finish(path, errMsg string) {
 	}
 }
 
-func (j *directJob) view(names map[string]string) TorrentView {
+func (j *directJob) view(nameOf func(uid string) string) TorrentView {
+	v := j.snapshot()
+	// the core may be asked for the names: not under the job's lock
+	if j.addedByUID != "" {
+		v.AddedByName = nameOf(j.addedByUID)
+	}
+	return v
+}
+
+func (j *directJob) snapshot() TorrentView {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	done := j.done.Load()
@@ -166,15 +197,12 @@ func (j *directJob) view(names map[string]string) TorrentView {
 	if v.Name == "" {
 		v.Name = j.title
 	}
-	if j.addedByUID != "" {
-		v.AddedByName = names[j.addedByUID]
-	}
 	return v
 }
 
 // directViews lists the direct downloads, dropping finished ones older
 // than directKeep.
-func (s *Service) directViews(names map[string]string) []TorrentView {
+func (s *Service) directViews(nameOf func(uid string) string) []TorrentView {
 	s.direct.mu.Lock()
 	jobs := make([]*directJob, 0, len(s.direct.jobs))
 	for id, j := range s.direct.jobs {
@@ -190,7 +218,7 @@ func (s *Service) directViews(names map[string]string) []TorrentView {
 	s.direct.mu.Unlock()
 	out := make([]TorrentView, 0, len(jobs))
 	for _, j := range jobs {
-		out = append(out, j.view(names))
+		out = append(out, j.view(nameOf))
 	}
 	sort.SliceStable(out, func(i, k int) bool { return out[i].AddedAt.Before(out[k].AddedAt) })
 	return out

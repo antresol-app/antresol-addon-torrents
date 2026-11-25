@@ -3,6 +3,7 @@ package migrate
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -15,11 +16,18 @@ import (
 // restart or an addon update.
 func reopened(t *testing.T, e *svcEnv, idx ProwlarrImporter) *Service {
 	t.Helper()
+	return reopenedIn(t, e, idx, e.s.QB.StateDir)
+}
+
+// reopenedIn is reopened with the given move-state folder ("": none, the
+// key stays in the settings, as before the key file).
+func reopenedIn(t *testing.T, e *svcEnv, idx ProwlarrImporter, stateDir string) *Service {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	r := NewRunner(&Runner{ReportDir: t.TempDir(), TmpDir: t.TempDir(), BaseCtx: ctx})
 	src, left := DefaultPaths(e.dir, filepath.Join(e.dir, "prowlarr", "prowlarr.db"))
-	return New(r, Service{DB: e.db, Indexer: idx, Paths: src, Leftover: left})
+	return New(r, Service{DB: e.db, Indexer: idx, Paths: src, Leftover: left, QB: QBOptions{StateDir: stateDir}})
 }
 
 func sealedRow(t *testing.T, e *svcEnv) (string, bool) {
@@ -66,6 +74,47 @@ func TestRemotesSurviveRestart(t *testing.T) {
 	}
 }
 
+// The sealing key is a 0600 file beside the move state, not a row of the
+// database: a copy of the database alone cannot open the connections. A
+// key the database held (an earlier version) moves to the file and the
+// kept connections stay readable.
+func TestRemotesKeyLivesInAFile(t *testing.T) {
+	e := newSvcEnv(t, nil)
+	ctx := context.Background()
+	api := sonarrAPI(t, nil, nil, false)
+	if _, err := e.s.Connect(ctx, SourceSonarr, Remote{URL: api.URL, APIKey: fakeAPIKey}); err != nil {
+		t.Fatal(err)
+	}
+	st, err := os.Stat(e.s.keyFile())
+	if err != nil || st.Mode().Perm() != 0o600 {
+		t.Fatalf("key file: %v %v", st, err)
+	}
+	var n int
+	e.db.QueryRow(`SELECT COUNT(*) FROM settings WHERE key=?`, remotesKeySetting).Scan(&n)
+	if n != 0 {
+		t.Fatal("the key is in the database too")
+	}
+
+	// the earlier version: no key file, the key in the settings
+	old := newSvcEnv(t, nil)
+	legacy := reopenedIn(t, old, nil, "")
+	if _, err := legacy.Connect(ctx, SourceSonarr, Remote{URL: api.URL, APIKey: fakeAPIKey}); err != nil {
+		t.Fatal(err)
+	}
+	old.db.QueryRow(`SELECT COUNT(*) FROM settings WHERE key=?`, remotesKeySetting).Scan(&n)
+	if n != 1 {
+		t.Fatal("the legacy key is not in the settings")
+	}
+	again := reopenedIn(t, old, nil, old.s.QB.StateDir)
+	if r, ok := again.remoteFor(SourceSonarr); !ok || r.APIKey != fakeAPIKey {
+		t.Fatalf("the connection did not survive the move of the key: %+v %v", r, ok)
+	}
+	old.db.QueryRow(`SELECT COUNT(*) FROM settings WHERE key=?`, remotesKeySetting).Scan(&n)
+	if _, err := os.Stat(again.keyFile()); err != nil || n != 0 {
+		t.Fatalf("key not moved: file %v, rows %d", err, n)
+	}
+}
+
 // A row that does not open (another key: a copied database) is dropped:
 // nothing is connected, nothing breaks.
 func TestRemotesDamagedRowDropped(t *testing.T) {
@@ -75,7 +124,7 @@ func TestRemotesDamagedRowDropped(t *testing.T) {
 	if _, err := e.s.Connect(ctx, SourceSonarr, Remote{URL: api.URL, APIKey: fakeAPIKey}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.db.Exec(`UPDATE settings SET value=? WHERE key=?`, strings.Repeat("0", 64), remotesKeySetting); err != nil {
+	if err := os.WriteFile(e.s.keyFile(), []byte(strings.Repeat("0", 64)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if v, _ := reopened(t, e, nil).Remote(SourceSonarr); v.Connected {

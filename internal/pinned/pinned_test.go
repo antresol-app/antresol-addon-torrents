@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -373,4 +375,70 @@ func contains(xs []string, x string) bool {
 // by is profile id as X-Antresol-User carries it.
 func by(id int64) addonkit.User {
 	return addonkit.User{ID: id, UID: "uid-" + strconv.FormatInt(id, 10)}
+}
+
+// gateEngine holds every metadata fetch until released and counts how many
+// run at once.
+type gateEngine struct {
+	*fakeEngine
+	gate    chan struct{}
+	running atomic.Int32
+	peak    atomic.Int32
+}
+
+func (g *gateEngine) FetchInfo(ctx context.Context, magnet string) ([]byte, error) {
+	n := g.running.Add(1)
+	defer g.running.Add(-1)
+	for {
+		p := g.peak.Load()
+		if n <= p || g.peak.CompareAndSwap(p, n) {
+			break
+		}
+	}
+	<-g.gate
+	return g.fakeEngine.FetchInfo(ctx, magnet)
+}
+
+// Any adult can start a metadata fetch: only maxMagnetFetches run at once,
+// the others wait for a place (or for their request to end).
+func TestFromMagnetFewAtOnce(t *testing.T) {
+	e := newEnv(t)
+	g := &gateEngine{fakeEngine: e.eng, gate: make(chan struct{})}
+	e.svc.Engine = g
+	const heldIH = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	e.eng.has[heldIH], e.eng.modes = true, map[string]string{heldIH: torrent.ModeDownload}
+	e.eng.data = map[string]*fakeData{heldIH: {saveDir: "/d", files: []torrent.FileInfo{{Index: 0, Path: "Show/e1.mkv", Size: 5}}}}
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			e.svc.fromMagnet(context.Background(), fmt.Sprintf("magnet:?xt=urn:btih:%040d", i))
+		}()
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for g.running.Load() < maxMagnetFetches && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	time.Sleep(50 * time.Millisecond) // a fourth would be running by now
+	if n := g.running.Load(); n != maxMagnetFetches {
+		t.Fatalf("%d fetches at once, want %d", n, maxMagnetFetches)
+	}
+	// one that waits gives up with its request
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if _, err := e.svc.fromMagnet(ctx, "magnet:?xt=urn:btih:"+strings.Repeat("a", 40)); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("a waiting fetch: %v", err)
+	}
+	// a torrent the engine holds does not wait for a place: it is read from the engine
+	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Second)
+	defer cancel2()
+	if got, err := e.svc.fromMagnet(ctx2, "magnet:?xt=urn:btih:"+heldIH); err != nil || got.ih != heldIH || len(got.files) != 1 {
+		t.Fatalf("a held torrent waited for a place: %+v %v", got, err)
+	}
+	close(g.gate)
+	wg.Wait()
+	if p := g.peak.Load(); p > maxMagnetFetches {
+		t.Fatalf("peak %d fetches", p)
+	}
 }

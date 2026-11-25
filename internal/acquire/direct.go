@@ -136,13 +136,19 @@ func (s *Service) fetchDirect(ctx context.Context, req AcquireRequest, title, ar
 	default:
 		// maxDirectAtOnce run already: queued; checks and errors then
 		// show on the job
+		if !s.direct.enqueue() {
+			s.dropDirectJob(job)
+			return AcquireResult{}, uerr(ErrUnavailable, "Слишком много загрузок в очереди — подождите")
+		}
 		job.setStatus(torrent.StatusQueued)
 		go func() {
 			defer s.wg.Done()
 			defer job.cancel()
 			select {
 			case slots <- struct{}{}:
+				s.direct.dequeue()
 			case <-jctx.Done():
+				s.direct.dequeue()
 				job.finish("", s.directCancelMsg())
 				return
 			}

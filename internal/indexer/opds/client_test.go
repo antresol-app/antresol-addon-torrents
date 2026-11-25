@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/antresol-app/antresol/addonkit"
 )
 
 // flibusta is a fake Flibusta-style catalog: the root links an OpenSearch
@@ -158,24 +160,23 @@ func TestOPDSClientRefusesPrivate(t *testing.T) {
 	for _, a := range []string{"127.0.0.1", "10.1.2.3", "192.168.1.1", "172.16.0.1", "169.254.169.254", "100.64.0.1", "0.0.0.0", "::1", "fd00::1", "fe80::1", "::ffff:127.0.0.1",
 		"::127.0.0.1", "64:ff9b::7f00:1", "64:ff9b::a00:1", "64:ff9b:1::c0a8:101", "2002:7f00:1::1", "2002:c0a8:101::1",
 		"198.18.0.1", "192.0.0.8", "240.0.0.1", "255.255.255.255", "0.1.2.3", "fec0::1", "224.0.0.1", "ff02::1"} {
-		if !blockedAddr(a) {
+		if !addonkit.BlockedAddr(a) {
 			t.Errorf("%s is not blocked", a)
 		}
 	}
-	// the dialer's check itself (what a redirect to such an address meets)
-	if err := guardControl("tcp", "127.0.0.1:80", nil); !errors.Is(err, ErrPrivate) {
-		t.Fatalf("control: %v", err)
-	}
-	if err := guardControl("tcp", "[64:ff9b::a00:1]:443", nil); !errors.Is(err, ErrPrivate) {
-		t.Fatalf("control nat64: %v", err)
-	}
-	if err := guardControl("tcp", "93.184.216.34:443", nil); err != nil {
-		t.Fatalf("control public: %v", err)
-	}
 	for _, a := range []string{"93.184.216.34", "2606:2800:220:1::1", "64:ff9b::5db8:d822", "2002:5db8:d822::1"} {
-		if blockedAddr(a) {
+		if addonkit.BlockedAddr(a) {
 			t.Errorf("%s is blocked", a)
 		}
+	}
+}
+
+// With the home network allowed the cloud metadata address stays out of
+// reach (the dialer refuses it before connecting).
+func TestOPDSClientAllowedHomeNetworkNeverReachesMetadata(t *testing.T) {
+	err := (&Client{URL: "http://169.254.169.254/opds", HTTP: NewHTTPClient(true)}).Test(context.Background())
+	if !errors.Is(err, ErrPrivate) {
+		t.Fatalf("link-local with allowPrivate: %v", err)
 	}
 }
 
@@ -208,7 +209,7 @@ func TestBestLinkOrder(t *testing.T) {
 // DNS pointed there) and any other address through the address guard; the
 // redirect rules are NewHTTPClient's.
 func hostClient(srv *httptest.Server, hosts ...string) *http.Client {
-	guarded := &net.Dialer{Control: guardControl}
+	guarded := &net.Dialer{Control: addonkit.DialControl(false)}
 	plain := &net.Dialer{}
 	tr := &http.Transport{DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 		h, _, _ := net.SplitHostPort(addr)
@@ -219,7 +220,7 @@ func hostClient(srv *httptest.Server, hosts ...string) *http.Client {
 		}
 		return guarded.DialContext(ctx, network, addr)
 	}}
-	return &http.Client{Transport: tr, CheckRedirect: NewHTTPClient(false).CheckRedirect}
+	return &http.Client{Transport: privateErr{tr}, CheckRedirect: NewHTTPClient(false).CheckRedirect}
 }
 
 // TestOPDSClientFollowsCatalogRedirects: a catalog whose url redirects to

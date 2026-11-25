@@ -445,6 +445,7 @@ func TestRollback_PausedUnderNoSeeding(t *testing.T) {
 		t.Fatalf("import %+v", from.Lines)
 	}
 	n := len(e.qb.posts())
+	keep = 0 // the plan and the import asked too (their notes)
 	back := q.rollback(t, from.ID)
 	if len(back.Lines) != 2 || keep != 2 { // asked per line
 		t.Fatalf("rollback %+v (asked %d)", back.Lines, keep)
@@ -482,7 +483,7 @@ func TestQBImport_HoldsChanged(t *testing.T) {
 	ih, _ := e.addTorrent(map[string][]byte{"Show/ep1.mkv": randBytes(200 << 10)}, nil)
 	q := newQBService(t, e)
 	var sets [][]addonkit.Hold
-	p := &holds.Pusher{Src: holds.EngineSource{Engine: e.eng}, FileRoots: []string{filepath.Dir(e.save)},
+	p := &holds.Pusher{Src: &holds.EngineSource{Engine: e.eng}, FileRoots: []string{filepath.Dir(e.save)},
 		Put: func(_ context.Context, h []addonkit.Hold) error { sets = append(sets, h); return nil }}
 	q.HoldsChanged = func() {
 		q.mu.Lock()

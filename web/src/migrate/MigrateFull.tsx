@@ -12,7 +12,7 @@ import m from '../pages/Manage.module.css'
 import full from './MigrateFull.module.css'
 import { SourceSetup } from './SourceSetup'
 
-const { Button, Sheet } = ui
+const { Button, Checkbox, Sheet } = ui
 
 /** The product's name in these texts (the core's brand). */
 const APP_NAME = 'Antresol'
@@ -136,10 +136,7 @@ function TopCards({ ctx }: { ctx: MigrateCtx }) {
                   <p className={full.sheetNote}>{t('migrate.switch.tmdbErrors', { count: switchPlan.errors, app: APP_NAME })}</p>
                 )}
                 <p className={full.sheetNote}>{t('migrate.switch.stopArr')}</p>
-                <label className={full.confirmCheck}>
-                  <input type="checkbox" checked={arrStopped} onChange={(e) => setArrStopped(e.target.checked)} />
-                  <span>{t('migrate.switch.arrStopped')}</span>
-                </label>
+                <Checkbox className={full.confirmCheck} label={t('migrate.switch.arrStopped')} checked={arrStopped} onChange={setArrStopped} />
                 {switchError && (
                   <p className={full.sheetError} role="alert">
                     {switchError}

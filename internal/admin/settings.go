@@ -10,6 +10,7 @@ import (
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/i18n"
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/lang"
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/releaseprefs"
+	"github.com/antresol-app/antresol-addon-torrents/internal/httpx"
 	"github.com/antresol-app/antresol/addonkit"
 )
 
@@ -151,7 +152,7 @@ func (s *settings) load(r *http.Request) (settingsView, releaseprefs.Prefs, erro
 func (s *settings) get(w http.ResponseWriter, r *http.Request) {
 	v, _, err := s.load(r)
 	if err != nil {
-		internalErr(w, r, "settings", err)
+		httpx.InternalErr(w, r, "admin", "settings", err)
 		return
 	}
 	addonkit.WriteJSON(w, http.StatusOK, v)
@@ -201,11 +202,11 @@ func (s *settings) put(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	v, p, err := s.load(r)
 	if err != nil {
-		internalErr(w, r, "settings", err)
+		httpx.InternalErr(w, r, "admin", "settings", err)
 		return
 	}
 	var in settingsIn
-	if !decode(w, r, &in) {
+	if !httpx.Decode(w, r, &in) {
 		return
 	}
 	set := func(dst *bool, src *bool) {
@@ -259,7 +260,7 @@ func (s *settings) put(w http.ResponseWriter, r *http.Request) {
 		v.MP3Bitrate = *in.MP3Bitrate
 	}
 	if msg := v.validate(); msg != "" {
-		writeErr(w, r, http.StatusBadRequest, msg)
+		httpx.WriteErr(w, r, http.StatusBadRequest, msg)
 		return
 	}
 	v.BookLangs = lang.Ordered(v.BookLangs, v.Languages)
@@ -279,11 +280,11 @@ func (s *settings) put(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := s.Settings.SetUpload(ctx, v.UploadLimited, v.UploadLimitKBs); err != nil {
-		internalErr(w, r, "settings save", err)
+		httpx.InternalErr(w, r, "admin", "settings save", err)
 		return
 	}
 	if err := s.Settings.SetStreamCacheGB(ctx, v.StreamCacheGB); err != nil {
-		internalErr(w, r, "settings save", err)
+		httpx.InternalErr(w, r, "admin", "settings save", err)
 		return
 	}
 	if s.Upload != nil {
@@ -298,7 +299,7 @@ func (s *settings) put(w http.ResponseWriter, r *http.Request) {
 	}
 	out, _, err := s.load(r)
 	if err != nil {
-		internalErr(w, r, "settings", err)
+		httpx.InternalErr(w, r, "admin", "settings", err)
 		return
 	}
 	addonkit.WriteJSON(w, http.StatusOK, out)
@@ -311,19 +312,19 @@ func (s *settings) putNoSeeding(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		On *bool `json:"on"`
 	}
-	if !decode(w, r, &in) {
+	if !httpx.Decode(w, r, &in) {
 		return
 	}
 	if in.On == nil {
-		writeErr(w, r, http.StatusBadRequest, "Неверный запрос")
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Неверный запрос")
 		return
 	}
 	if err := s.NoSeed.Set(r.Context(), *in.On); err != nil {
 		if errors.Is(err, boot.ErrForced) {
-			writeErr(w, r, http.StatusConflict, "Задано на сервере")
+			httpx.WriteErr(w, r, http.StatusConflict, "Задано на сервере")
 			return
 		}
-		internalErr(w, r, "no-seeding", err)
+		httpx.InternalErr(w, r, "admin", "no-seeding", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

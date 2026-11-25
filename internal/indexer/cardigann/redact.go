@@ -7,13 +7,33 @@ import (
 	"strings"
 )
 
-// secretParams are query parameters that carry tracker credentials in
-// Cardigann definitions (search and download links).
+// secretParams are query parameters and setting names that carry tracker
+// credentials in Cardigann definitions (search and download links), by their
+// whole name; secretParts are what a longer name may contain (login_password,
+// vb_login_password, staffpass, csrf_token, 2facode).
 var secretParams = map[string]bool{
 	"apikey": true, "api_key": true, "api-key": true, "key": true,
 	"passkey": true, "pass_key": true, "torrent_pass": true, "authkey": true, "auth_key": true,
 	"rsskey": true, "token": true, "secret": true, "password": true, "pass": true,
 	"cookie": true, "cookies": true, "sid": true, "session": true, "uid": true,
+	"pid": true, "pin": true, "pwd": true,
+}
+
+var secretParts = []string{"pass", "pwd", "token", "secret", "apikey", "api_key", "api-key", "authkey", "auth_key", "cookie", "2fa"}
+
+// IsSecretName reports whether a query parameter or a setting of this name
+// holds a credential (whatever its declared type).
+func IsSecretName(name string) bool {
+	n := strings.ToLower(strings.TrimSpace(name))
+	if secretParams[n] {
+		return true
+	}
+	for _, p := range secretParts {
+		if strings.Contains(n, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // tokenSegment matches a path segment that looks like a passkey (long hex
@@ -41,7 +61,7 @@ func RedactURL(raw string) string {
 	if u.RawQuery != "" {
 		q := u.Query()
 		for k := range q {
-			if secretParams[strings.ToLower(k)] {
+			if IsSecretName(k) {
 				q[k] = []string{redacted}
 			}
 		}
@@ -79,4 +99,17 @@ func redactErr(err error) error {
 		ue.URL = RedactURL(ue.URL)
 	}
 	return err
+}
+
+// maxPageMessage is the most of a tracker page's own words an error keeps
+// (they reach logs and the stored last error of a source).
+const maxPageMessage = 200
+
+// pageMessage is msg on one line, cut to maxPageMessage runes.
+func pageMessage(msg string) string {
+	msg = strings.Join(strings.Fields(msg), " ")
+	if r := []rune(msg); len(r) > maxPageMessage {
+		return string(r[:maxPageMessage]) + "…"
+	}
+	return msg
 }

@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/antresol-app/antresol-addon-torrents/internal/follow"
+	"github.com/antresol-app/antresol-addon-torrents/internal/httpx"
 	"github.com/antresol-app/antresol/addonkit"
 )
 
@@ -31,15 +32,15 @@ func followErr(w http.ResponseWriter, r *http.Request, what string, err error) {
 	case r.Context().Err() != nil:
 		return // the client went away
 	case errors.Is(err, follow.ErrInvalid):
-		writeErr(w, r, http.StatusBadRequest, "Следить можно только за фильмом или сериалом")
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Следить можно только за фильмом или сериалом")
 	case errors.Is(err, follow.ErrNotFound):
-		writeErr(w, r, http.StatusNotFound, "Не найдено")
+		httpx.WriteErr(w, r, http.StatusNotFound, "Не найдено")
 	case errors.Is(err, follow.ErrInactive):
-		writeErr(w, r, http.StatusConflict, "Слежение выключено")
+		httpx.WriteErr(w, r, http.StatusConflict, "Слежение выключено")
 	case errors.Is(err, follow.ErrUnavailable):
-		writeErr(w, r, http.StatusServiceUnavailable, "Нет связи с TMDB. Попробуйте позже")
+		httpx.WriteErr(w, r, http.StatusServiceUnavailable, "Нет связи с TMDB. Попробуйте позже")
 	default:
-		internalErr(w, r, what, err)
+		httpx.InternalErr(w, r, "followapi", what, err)
 	}
 }
 
@@ -72,7 +73,7 @@ const notYoursMsg = "Это слежение добавил другой про�
 // owned loads the follow of {id} when this profile may change it; false
 // with the error written otherwise.
 func (h *followAPI) owned(w http.ResponseWriter, r *http.Request, what string) (follow.Follow, bool) {
-	id, ok := idParam(w, r, "id")
+	id, ok := httpx.IDParam(w, r, "id")
 	if !ok {
 		return follow.Follow{}, false
 	}
@@ -82,7 +83,7 @@ func (h *followAPI) owned(w http.ResponseWriter, r *http.Request, what string) (
 		return f, false
 	}
 	if !mayChange(user(r), f) {
-		writeErr(w, r, http.StatusForbidden, notYoursMsg)
+		httpx.WriteErr(w, r, http.StatusForbidden, notYoursMsg)
 		return f, false
 	}
 	return f, true
@@ -92,7 +93,7 @@ func (h *followAPI) owned(w http.ResponseWriter, r *http.Request, what string) (
 func (h *followAPI) list(w http.ResponseWriter, r *http.Request) {
 	items, err := h.svc.List(r.Context())
 	if err != nil {
-		internalErr(w, r, "follow list", err)
+		httpx.InternalErr(w, r, "followapi", "follow list", err)
 		return
 	}
 	u := user(r)
@@ -114,7 +115,7 @@ func (h *followAPI) list(w http.ResponseWriter, r *http.Request) {
 // resolutionOK: absent, or one of follow.Resolutions (400 written otherwise).
 func resolutionOK(w http.ResponseWriter, r *http.Request, res *string) bool {
 	if res != nil && !slices.Contains(follow.Resolutions, *res) {
-		writeErr(w, r, http.StatusBadRequest, "Неизвестное качество")
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Неизвестное качество")
 		return false
 	}
 	return true
@@ -128,7 +129,7 @@ func (h *followAPI) add(w http.ResponseWriter, r *http.Request) {
 		TMDBID     int     `json:"tmdbId"`
 		Resolution *string `json:"resolution"`
 	}
-	if !decode(w, r, &in) || !resolutionOK(w, r, in.Resolution) {
+	if !httpx.Decode(w, r, &in) || !resolutionOK(w, r, in.Resolution) {
 		return
 	}
 	u := user(r)
@@ -156,7 +157,7 @@ func (h *followAPI) byTMDB(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.URL.Query().Get("tmdbId"))
 	kind := r.URL.Query().Get("kind")
 	if err != nil || id <= 0 || (kind != follow.KindSeries && kind != follow.KindMovie) {
-		writeErr(w, r, http.StatusBadRequest, "Неизвестный фильм или сериал")
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Неизвестный фильм или сериал")
 		return
 	}
 	f, err := h.svc.ByTMDB(r.Context(), kind, id)
@@ -189,11 +190,11 @@ func (h *followAPI) setActive(w http.ResponseWriter, r *http.Request) {
 		Active     *bool   `json:"active"`
 		Resolution *string `json:"resolution"`
 	}
-	if !decode(w, r, &in) || !resolutionOK(w, r, in.Resolution) {
+	if !httpx.Decode(w, r, &in) || !resolutionOK(w, r, in.Resolution) {
 		return
 	}
 	if in.Active == nil && in.Resolution == nil {
-		writeErr(w, r, http.StatusBadRequest, "Не указано, включить ли слежение")
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Не указано, включить ли слежение")
 		return
 	}
 	// the quality first: a follow turned on syncs with it (OnFollowed)

@@ -4,11 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -103,6 +105,62 @@ func waitIdle(t *testing.T, h *Hook) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatal("still searching")
+}
+
+// gateAcq holds every Acquire until released and counts how many run at once.
+type gateAcq struct {
+	*fakeAcq
+	gate    chan struct{}
+	running atomic.Int32
+	peak    atomic.Int32
+}
+
+func (g *gateAcq) Acquire(ctx context.Context, r acquire.AcquireRequest) (acquire.AcquireResult, error) {
+	n := g.running.Add(1)
+	defer g.running.Add(-1)
+	for {
+		p := g.peak.Load()
+		if n <= p || g.peak.CompareAndSwap(p, n) {
+			break
+		}
+	}
+	<-g.gate
+	return g.fakeAcq.Acquire(ctx, r)
+}
+
+// Wanted programmes are searched maxSearches at a time; the others wait and
+// show «searching» meanwhile.
+func TestChannelFetchSearchesAFewAtOnce(t *testing.T) {
+	acq := &gateAcq{fakeAcq: &fakeAcq{nextHash: "AB"}, gate: make(chan struct{})}
+	var ts []torrent.Status
+	h := newHook(t, acq.fakeAcq, &ts)
+	h.d.Acquire = acq
+	var want []addonkit.ChannelFetchTitle
+	for i := 1; i <= 6; i++ {
+		want = append(want, addonkit.ChannelFetchTitle{Key: fmt.Sprintf("episode:7:1:%d", i), Kind: "episode", TMDBID: 7, Season: 1, Episode: i})
+	}
+	got := call(t, h, addonkit.ChannelFetch{Want: want})
+	for _, w := range want {
+		if got[w.Key].State != "searching" {
+			t.Fatalf("%s: %+v", w.Key, got[w.Key])
+		}
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for acq.running.Load() < maxSearches && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	time.Sleep(50 * time.Millisecond) // a third would be running by now
+	if n := acq.running.Load(); n != maxSearches {
+		t.Fatalf("%d searches at once, want %d", n, maxSearches)
+	}
+	close(acq.gate)
+	waitIdle(t, h)
+	if p := acq.peak.Load(); p > maxSearches {
+		t.Fatalf("peak %d searches", p)
+	}
+	if len(acq.asked) != 6 {
+		t.Fatalf("asked %d, want 6", len(acq.asked))
+	}
 }
 
 func TestChannelFetchStartsReportsDrops(t *testing.T) {

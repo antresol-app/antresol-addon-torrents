@@ -9,7 +9,7 @@ import { type Source } from '../types'
 import { tr, useT } from '../i18n'
 import styles from "./SourceCard.module.css";
 
-const { Badge, IconButton, MenuItem, MenuSeparator, Menu, Toggle } = ui
+const { Badge, Button, IconButton, Menu, MenuItem, MenuSeparator, Spinner, Toggle } = ui
 
 export interface SourceCardProps {
   source: Source;
@@ -94,7 +94,7 @@ export function SourceCard({
       <p className={styles.status} role="status">
         {checking ? (
           <span className={styles.checking}>
-            <span className={styles.spinner} aria-hidden />{" "}
+            <Spinner track className={styles.spinner} />{" "}
             {t("comp.source.checking")}
           </span>
         ) : !s.enabled ? (
@@ -109,9 +109,9 @@ export function SourceCard({
               })}
             </span>
             {onEdit && (
-              <button type="button" className={styles.fix} onClick={onEdit}>
+              <Button variant="link" className={styles.fix} onClick={onEdit}>
                 {t("comp.source.fixSignIn")}
-              </button>
+              </Button>
             )}
           </>
         ) : (
@@ -132,7 +132,7 @@ export function SourceCard({
           </span>
           {backupChecking ? (
             <span className={styles.checking}>
-              <span className={styles.spinner} aria-hidden />{" "}
+              <Spinner track className={styles.spinner} />{" "}
               {t("comp.source.checking")}
             </span>
           ) : backup.status === "ok" ? (

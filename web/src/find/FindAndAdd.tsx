@@ -41,7 +41,7 @@ import type { Candidate, DiscoverKind, Release, ReleaseFilesRequest } from '../t
 import { TrackPicker } from './TrackPicker'
 import styles from './FindAndAdd.module.css'
 
-const { Button, ButtonLink, Sheet } = ui
+const { Button, ButtonLink, Sheet, Skeleton } = ui
 const imageUrl = core.imageUrl
 
 /** The search page's filter, as «Поиск» hands it to its blocks. */
@@ -616,11 +616,11 @@ function CandidateSkeleton({ square }: { square: boolean }) {
     <ul className={styles.candidates} aria-busy="true" aria-label={t('search.searching')}>
       {[0, 1, 2].map((i) => (
         <li key={i} className={styles.candidate}>
-          <div className={`${styles.poster} ${square ? styles.square : ''} ${styles.skeleton}`} />
+          <div className={`${styles.poster} ${square ? styles.square : ''}`} />
           <div className={styles.info}>
-            <div className={styles.skeletonLine} style={{ width: '30%' }} />
-            <div className={styles.skeletonLine} style={{ width: '55%', height: 18 }} />
-            <div className={styles.skeletonLine} style={{ width: '80%' }} />
+            <Skeleton tone="soft" className={`${styles.skeletonLine} ${styles.skeletonKicker}`} />
+            <Skeleton tone="soft" className={`${styles.skeletonLine} ${styles.skeletonName}`} />
+            <Skeleton tone="soft" className={`${styles.skeletonLine} ${styles.skeletonOverview}`} />
           </div>
         </li>
       ))}

@@ -10,15 +10,21 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
 	"time"
 )
 
 // The connections typed on «Переезд» (Connect) are kept across restarts
 // and addon updates in the addon's settings table, as the sources' own
 // secrets are kept in its database: the whole set as one row, sealed with
-// AES-256-GCM under a random key of its own (another settings row, made on
-// first use). Only Connect and Forget write it; nothing answers, logs or
-// reports a key or a password.
+// AES-256-GCM under a random key of its own, made on first use and kept in a
+// 0600 file beside the move state (not in the database: a copy of
+// torrents.db alone must not hold both). Only Connect and Forget write it;
+// nothing answers, logs or reports a key or a password.
 const (
 	remotesSetting    = "migrate_remotes"
 	remotesKeySetting = "migrate_remotes_key"
@@ -50,19 +56,54 @@ func (r *remotes) load(m map[string]Remote) {
 	r.gen++
 }
 
-// remotesKey is the sealing key, made on first use.
-func remotesKey(ctx context.Context, db *sql.DB) ([]byte, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
+// keyMu makes the first use of the key one step.
+var keyMu sync.Mutex
+
+// keyFile is where the sealing key lives: beside the move state, outside
+// the database, so a copy of torrents.db holds the sealed set but not its
+// key. "": the service has no state folder, the key stays in the settings.
+func (s *Service) keyFile() string {
+	if s.QB.StateDir == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(s.QB.StateDir), "remotes.key")
+}
+
+// remotesKey is the sealing key, made on first use. A key the database
+// held until now (an earlier version) moves to the file, so what it sealed
+// stays readable.
+func remotesKey(ctx context.Context, db *sql.DB, file string) ([]byte, error) {
+	keyMu.Lock()
+	defer keyMu.Unlock()
+	if file != "" {
+		if k, err := readKeyFile(file); err == nil || !errors.Is(err, fs.ErrNotExist) {
+			return k, err
+		}
+	}
+	k, err := settingsKey(ctx, db, file == "")
+	if err != nil || file == "" {
+		return k, err
+	}
+	if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
 		return nil, err
 	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING`, remotesKeySetting, hex.EncodeToString(b)); err != nil {
+	if err := os.WriteFile(file, []byte(hex.EncodeToString(k)), 0o600); err != nil {
 		return nil, err
 	}
-	var v string
-	if err := db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key=?`, remotesKeySetting).Scan(&v); err != nil {
+	// only now is the database's copy dropped
+	_, err = db.ExecContext(ctx, `DELETE FROM settings WHERE key=?`, remotesKeySetting)
+	return k, err
+}
+
+func readKeyFile(file string) ([]byte, error) {
+	b, err := os.ReadFile(file)
+	if err != nil {
 		return nil, err
 	}
+	return decodeKey(strings.TrimSpace(string(b)))
+}
+
+func decodeKey(v string) ([]byte, error) {
 	k, err := hex.DecodeString(v)
 	if err != nil || len(k) != 32 {
 		return nil, errors.New("migrate remotes: malformed key")
@@ -70,8 +111,31 @@ func remotesKey(ctx context.Context, db *sql.DB) ([]byte, error) {
 	return k, nil
 }
 
-func remotesAEAD(ctx context.Context, db *sql.DB) (cipher.AEAD, error) {
-	k, err := remotesKey(ctx, db)
+// settingsKey is the key the settings hold; create: made there when missing
+// (without a key file), else a missing one is a new random key not stored.
+func settingsKey(ctx context.Context, db *sql.DB, create bool) ([]byte, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return nil, err
+	}
+	if create {
+		if _, err := db.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING`, remotesKeySetting, hex.EncodeToString(b)); err != nil {
+			return nil, err
+		}
+	}
+	var v string
+	err := db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key=?`, remotesKeySetting).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) && !create {
+		return b, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return decodeKey(v)
+}
+
+func (s *Service) remotesAEAD(ctx context.Context) (cipher.AEAD, error) {
+	k, err := remotesKey(ctx, s.DB, s.keyFile())
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +165,7 @@ func (s *Service) saveRemotes(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	aead, err := remotesAEAD(ctx, s.DB)
+	aead, err := s.remotesAEAD(ctx)
 	if err != nil {
 		return err
 	}
@@ -144,7 +208,7 @@ func (s *Service) openRemotes(ctx context.Context, v string) (map[string]Remote,
 	if err != nil {
 		return nil, errors.New("migrate remotes: not base64")
 	}
-	aead, err := remotesAEAD(ctx, s.DB)
+	aead, err := s.remotesAEAD(ctx)
 	if err != nil {
 		return nil, err
 	}

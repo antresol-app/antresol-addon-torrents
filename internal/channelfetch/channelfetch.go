@@ -53,6 +53,10 @@ const settingsKey = "channel_fetches"
 // acquireTimeout bounds one background start (the search of every source).
 const acquireTimeout = 5 * time.Minute
 
+// maxSearches background starts search at once; the rest wait (their
+// programmes show «searching» meanwhile).
+const maxSearches = 2
+
 // entry is a programme fetched for channels.
 type entry struct {
 	InfoHash string `json:"ih,omitempty"`
@@ -67,12 +71,13 @@ type Hook struct {
 	d         Deps
 	mu        sync.Mutex
 	searching map[string]bool
+	slots     chan struct{}   // maxSearches places for the background starts
 	ctx       context.Context // the addon's lifetime, for the background starts
 }
 
 // Register answers channels.fetch on m; ctx bounds the background starts.
 func Register(ctx context.Context, m *addonkit.HookMux, d Deps) *Hook {
-	h := &Hook{d: d, searching: map[string]bool{}, ctx: ctx}
+	h := &Hook{d: d, searching: map[string]bool{}, slots: make(chan struct{}, maxSearches), ctx: ctx}
 	m.Handle("channels.fetch", h.serve)
 	return h
 }
@@ -240,13 +245,7 @@ func (h *Hook) followed(ctx context.Context, w addonkit.ChannelFetchTitle) bool 
 func (h *Hook) start(w addonkit.ChannelFetchTitle) {
 	h.searching[w.Key] = true
 	go func() {
-		ctx, cancel := context.WithTimeout(h.ctx, acquireTimeout)
-		defer cancel()
-		req := acquire.AcquireRequest{TMDBID: w.TMDBID, Kind: acquire.KindMovie, Mode: acquire.ModeDownload, Background: true}
-		if w.Kind == "episode" {
-			req.Kind, req.Season, req.Episode = acquire.KindSeries, w.Season, w.Episode
-		}
-		res, err := h.d.Acquire.Acquire(ctx, req)
+		res, err := h.acquire(w)
 		h.mu.Lock()
 		defer h.mu.Unlock()
 		delete(h.searching, w.Key)
@@ -270,6 +269,24 @@ func (h *Hook) start(w addonkit.ChannelFetchTitle) {
 			h.log().Warn("channel fetches: save", "err", serr)
 		}
 	}()
+}
+
+// acquire runs the search and start of w once a place is free (at most
+// maxSearches at once); its time limit counts from then.
+func (h *Hook) acquire(w addonkit.ChannelFetchTitle) (acquire.AcquireResult, error) {
+	select {
+	case h.slots <- struct{}{}:
+		defer func() { <-h.slots }()
+	case <-h.ctx.Done():
+		return acquire.AcquireResult{}, h.ctx.Err()
+	}
+	ctx, cancel := context.WithTimeout(h.ctx, acquireTimeout)
+	defer cancel()
+	req := acquire.AcquireRequest{TMDBID: w.TMDBID, Kind: acquire.KindMovie, Mode: acquire.ModeDownload, Background: true}
+	if w.Kind == "episode" {
+		req.Kind, req.Season, req.Episode = acquire.KindSeries, w.Season, w.Episode
+	}
+	return h.d.Acquire.Acquire(ctx, req)
 }
 
 // errorText is what the admin is shown of a failed start (Russian).

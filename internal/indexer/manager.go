@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
-	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/i18n"
 	"github.com/antresol-app/antresol-addon-torrents/internal/indexer/cardigann"
+	"github.com/antresol-app/antresol-addon-torrents/internal/netguard"
 )
 
 // Source statuses.
@@ -66,7 +66,10 @@ type SourcePatch struct {
 
 // Options configure a Manager.
 type Options struct {
-	HTTP          *http.Client  // shared transport; every source gets its own cookie jar
+	// HTTP, when set, is used for every source (every source gets its own
+	// cookie jar). Nil: sources are fetched with clients that refuse the
+	// local network but for the site the admin pointed the source at.
+	HTTP          *http.Client
 	FlareSolverr  string        // FlareSolverr base URL, "" = none
 	SearchTimeout time.Duration // per source, default 20 s
 	TestTimeout   time.Duration // login + test search, default 60 s (FlareSolverr is slow)
@@ -82,9 +85,13 @@ type Options struct {
 
 // Manager stores sources, runs searches and downloads.
 type Manager struct {
-	db            *sql.DB
-	cat           *Catalog
+	db  *sql.DB
+	cat *Catalog
+	// http is the client of FlareSolverr and, when the caller passed
+	// Options.HTTP (tests, embedding; ownHTTP), of every source; otherwise
+	// each source gets a guarded one (siteHTTP)
 	http          *http.Client
+	ownHTTP       bool
 	flareSolverr  string
 	searchTimeout time.Duration
 	testTimeout   time.Duration
@@ -119,6 +126,8 @@ type Manager struct {
 
 	// topics: what release pages said of their voice-overs (topic.go)
 	topics topicCache
+	// searches: what a source answered lately (search_cache.go)
+	searches searchCache
 }
 
 // A runner keeps the login session of a source between searches.
@@ -132,7 +141,7 @@ type cachedRunner struct {
 // NewManager creates a Manager over the sources table.
 func NewManager(db *sql.DB, cat *Catalog, o Options) *Manager {
 	m := &Manager{
-		db: db, cat: cat, http: o.HTTP, flareSolverr: o.FlareSolverr,
+		db: db, cat: cat, http: o.HTTP, ownHTTP: o.HTTP != nil, flareSolverr: o.FlareSolverr,
 		searchTimeout: o.SearchTimeout, testTimeout: o.TestTimeout, log: o.Logger, onStatus: o.OnStatus,
 		studios: o.Studios, flakyBudget: FlakyBudget, gate: cardigann.NewSolverGate(),
 		now: time.Now, runners: map[int64]*cachedRunner{}, directHTTP: opdsHTTP,
@@ -634,8 +643,11 @@ func (m *Manager) runner(s Source) (*cardigann.Runner, error) {
 		return c.runner, nil
 	}
 	r := &cardigann.Runner{
-		Def: def, Settings: maps.Clone(s.Settings), HTTP: m.http,
+		Def: def, Settings: maps.Clone(s.Settings), HTTP: m.siteHTTP(s), SolverHTTP: m.http,
 		FlareSolverr: m.flareSolverr, Logger: m.log, SolverGate: m.gate,
+	}
+	if !m.ownHTTP {
+		r.SolverHostOK = m.solverHostOK(s)
 	}
 	r.Now = func() time.Time { return m.now() }
 	id := s.ID
@@ -645,13 +657,67 @@ func (m *Manager) runner(s Source) (*cardigann.Runner, error) {
 		// saved into the library: no home network (unless the admin allows
 		// it), no client timeout over a long file (contexts bound it),
 		// stricter redirects; FlareSolverr is reached as usual
-		r.HTTP, r.SolverHTTP, r.Strict = m.directHTTP(s), m.http, true
+		r.HTTP, r.Strict = m.directHTTP(s), true
+		r.SolverHostOK = m.solverHostOK(s)
 	}
 	if def.Login != nil && def.Login.Method == "cookie" {
 		r.OnCookies = func(cookie string) { m.saveSessionCookie(id, r, cookie) }
 	}
 	m.runners[s.ID] = &cachedRunner{key: key, def: def, runner: r, settings: maps.Clone(s.Settings)}
 	return r, nil
+}
+
+// siteHTTP is the client a source's site is fetched with: the caller's own
+// (Options.HTTP) or the shared one when the admin allowed the home network
+// (allow_local); else one that refuses the local network but for the hosts
+// the admin named for this source (localHosts). A tracker's pages choose
+// where result links and redirects point, so those are not trusted.
+func (m *Manager) siteHTTP(s Source) *http.Client {
+	if m.ownHTTP || truthy(s.Settings["allow_local"]) {
+		return m.http
+	}
+	return &http.Client{Timeout: 90 * time.Second, Transport: netguard.Transport(m.localHosts(s))}
+}
+
+// localHosts: the hosts of a source that may be on the home network, as the
+// admin set them up: the mirror (sitelink) and the API host (apiurl) he
+// typed, and the links of a definition he installed himself (a LAN Jackett
+// or Prowlarr indexer). The links of an embedded definition are public
+// sites, and a direct-download source has none (allow_local is its switch).
+func (m *Manager) localHosts(s Source) func(host string) bool {
+	hosts := map[string]bool{}
+	if !m.isDirect(s) {
+		links := []string{s.Settings["sitelink"], s.Settings["apiurl"]}
+		if e, ok := m.cat.Get(s.DefinitionID); ok && e.Custom {
+			if def, err := m.cat.Definition(s.DefinitionID); err == nil {
+				links = append(append(links, def.Links...), def.LegacyLinks...)
+			}
+		}
+		for _, l := range links {
+			if h := cardigann.SiteHost(l); h != "" {
+				hosts[h] = true
+			}
+		}
+	}
+	return func(host string) bool { return hosts[strings.ToLower(host)] }
+}
+
+// solverHostOK tells FlareSolverr, whose browser resolves names and follows
+// redirects on its own, which hosts it may fetch for a source: those the
+// source is allowed to reach itself.
+func (m *Manager) solverHostOK(s Source) func(ctx context.Context, host string) bool {
+	if truthy(s.Settings["allow_local"]) {
+		return nil
+	}
+	allow := m.localHosts(s)
+	return func(ctx context.Context, host string) bool {
+		if allow(host) {
+			return true
+		}
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		return !netguard.HostBlocked(ctx, host)
+	}
 }
 
 func runnerKey(defID string, settings map[string]string) string {
@@ -714,6 +780,11 @@ func (m *Manager) Download(ctx context.Context, sourceID int64, link string) (ca
 	if m.isDirect(s) {
 		return cardigann.DownloadResult{}, i18n.Errorf("%s: это прямая загрузка, не торрент", s.Name)
 	}
+	// every caller, the background ones (auto-replace, season packs) too:
+	// a result link a tracker page made up may name any host
+	if err := m.checkLink(s, link); err != nil {
+		return cardigann.DownloadResult{}, err
+	}
 	r, err := m.runner(s)
 	if err != nil {
 		return cardigann.DownloadResult{}, err
@@ -737,13 +808,21 @@ var errForeignRelease = errors.New("Эта раздача не из выбран
 // session, so a link from a profile is checked first. A direct source passes
 // as Download refuses it and Fetch checks its links itself.
 func (m *Manager) CheckReleaseLink(ctx context.Context, sourceID int64, link string) error {
-	link = strings.TrimSpace(link)
-	if strings.HasPrefix(strings.ToLower(link), "magnet:") {
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(link)), "magnet:") {
 		return nil
 	}
 	s, err := m.Get(ctx, sourceID)
 	if err != nil {
 		return err
+	}
+	return m.checkLink(s, link)
+}
+
+// checkLink is CheckReleaseLink for a source already read.
+func (m *Manager) checkLink(s Source, link string) error {
+	link = strings.TrimSpace(link)
+	if strings.HasPrefix(strings.ToLower(link), "magnet:") {
+		return nil
 	}
 	if m.isDirect(s) {
 		// Download refuses a direct source; Fetch and fetchCardigann check
@@ -765,32 +844,10 @@ func (m *Manager) CheckReleaseLink(ctx context.Context, sourceID int64, link str
 			sites = append(sites, st.Default) // an API definition's own host
 		}
 	}
-	if !hostOnSite(sites, u.Hostname()) {
+	if !cardigann.HostOnSite(sites, u.Hostname(), true) {
 		return errForeignRelease
 	}
 	return nil
-}
-
-// hostOnSite: host is the host of one of the site urls (a bare host such as
-// an api host is one too), or a subdomain of it.
-func hostOnSite(sites []string, host string) bool {
-	host = strings.ToLower(host)
-	for _, l := range sites {
-		l = strings.TrimSpace(l)
-		if !strings.Contains(l, "//") {
-			l = "//" + l
-		}
-		u, err := url.Parse(l)
-		if err != nil || u.Hostname() == "" {
-			continue
-		}
-		h := strings.ToLower(u.Hostname())
-		// an IP has no subdomains
-		if host == h || net.ParseIP(h) == nil && strings.HasSuffix(host, "."+h) {
-			return true
-		}
-	}
-	return false
 }
 
 // directDef: the source's tracker definition serves files, not torrents

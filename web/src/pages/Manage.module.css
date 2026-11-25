@@ -87,6 +87,10 @@
 .ok {
   color: var(--success);
 }
+/* a problem right under the page's title */
+.afterTitle {
+  margin-top: var(--s-4);
+}
 .spinnerRow {
   display: flex;
   align-items: center;
@@ -96,23 +100,11 @@
   color: var(--label-2);
   font: var(--t-subhead);
 }
+/* ui/Spinner's ring, a little bigger and thicker */
 .spinner {
-  width: 22px;
-  height: 22px;
-  border: 2.5px solid var(--fill-1);
-  border-top-color: var(--label);
-  border-radius: 50%;
-  animation: spin 0.9s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .spinner {
-    animation-duration: 2.4s;
-  }
+  --spinner-size: 22px;
+  --spinner-width: 2.5px;
+  color: var(--label);
 }
 @media (max-width: 699px) {
   .title {

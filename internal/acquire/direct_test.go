@@ -502,6 +502,45 @@ func TestDirectQueueAndStaleTemp(t *testing.T) {
 	}
 }
 
+// Past maxDirectAtOnce running and maxDirectQueued waiting a direct
+// download is refused (no job, no goroutine left behind); a place frees up
+// when a waiting one is removed.
+func TestDirectQueueCapped(t *testing.T) {
+	e := newDirectEnv(t, 50)
+	start := func(i int) (AcquireResult, error) {
+		return e.svc.Acquire(context.Background(), AcquireRequest{Kind: KindBook, Title: fmt.Sprintf("Медленная %d", i), Mode: ModeDownload,
+			ReleaseLink: e.srv.URL + "/b/slow.epub", SourceID: e.src.ID, Direct: true})
+	}
+	var last AcquireResult
+	for i := 0; i < maxDirectAtOnce+maxDirectQueued; i++ {
+		res, err := start(i)
+		if err != nil {
+			t.Fatalf("download %d: %v", i, err)
+		}
+		last = res
+	}
+	_, err := start(99)
+	if !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("past the queue: %v", err)
+	}
+	if n := len(e.svc.directViews(func(string) string { return "" })); n != maxDirectAtOnce+maxDirectQueued {
+		t.Fatalf("%d jobs listed, want %d", n, maxDirectAtOnce+maxDirectQueued)
+	}
+	if err := e.svc.removeDirect(last.InfoHash); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err = start(100); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no place freed by removing a waiting download: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestDirectPlacement(t *testing.T) {
 	for _, c := range []struct {
 		kind, title, artist, relTitle, name, ctype string

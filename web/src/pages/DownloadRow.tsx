@@ -18,7 +18,7 @@ import { tr, useT, type Key } from '../i18n'
 import { torrentStatusLabel } from '../format'
 import styles from './DownloadRow.module.css'
 
-const { Sheet, Badge, Button, IconButton, SwipeRow, Menu, MenuItem, MenuSeparator, ProgressBar } = ui
+const { Sheet, Badge, Button, Checkbox, IconButton, SwipeRow, Menu, MenuItem, MenuSeparator, ProgressBar } = ui
 
 const posterCache = new Map<number, string>()
 
@@ -385,12 +385,7 @@ function DownloadRowView({ t, onChanged }: RowProps) {
             },
           ]}
         >
-          {!direct && (
-            <label className={styles.check}>
-              <input type="checkbox" checked={withFiles} onChange={(e) => setWithFiles(e.target.checked)} />
-              <span>{tl('downloads.deleteFiles')}</span>
-            </label>
-          )}
+          {!direct && <Checkbox className={styles.check} tone="destructive" label={tl('downloads.deleteFiles')} checked={withFiles} onChange={setWithFiles} />}
         </Sheet>
       )}
     </SwipeRow>

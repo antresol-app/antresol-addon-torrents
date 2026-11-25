@@ -94,9 +94,20 @@ func init() {
 		"Данные на диске не совпадают с торрентом (%d %%)":                "The data on disk doesn’t match the torrent (%d %%)",
 		"Не удалось запустить раздачу в Antresol: %s":                     "Couldn’t start the torrent in Antresol: %s",
 		"В qBittorrent была на паузе — теперь раздаёт Antresol":           "Was paused in qBittorrent — Antresol seeds it now",
-		"qBittorrent не подтвердил остановку за %s":                       "qBittorrent didn’t confirm the stop within %s",
-		"она поставлена на паузу":                                         "it was paused",
-		"и поставить её на паузу тоже не удалось":                         "and pausing it failed too",
+
+		// migrate: a link-local address of an old service
+		"Адрес %s не может быть link-local адресом (169.254.x.x, fe80::)": "The %s address can’t be a link-local address (169.254.x.x, fe80::)",
+
+		// migrate: a mapped file path leaves the data folder
+		"Путь файла в состоянии qBittorrent выходит за папку раздачи": "A file path in the qBittorrent state leaves the torrent’s folder",
+
+		// migrate: «Не раздавать» is on
+		"Antresol не раздаёт её: включено «Не раздавать»":                                           "Antresol does not seed it: “Don’t seed” is on",
+		"Включено «Не раздавать»: после переноса раздача прекратится и в qBittorrent, и в Antresol": "“Don’t seed” is on: after the move the torrent stops seeding in both qBittorrent and Antresol",
+
+		"qBittorrent не подтвердил остановку за %s": "qBittorrent didn’t confirm the stop within %s",
+		"она поставлена на паузу":                   "it was paused",
+		"и поставить её на паузу тоже не удалось":   "and pausing it failed too",
 		"%s — Antresol не смог убрать свою копию раздачи (%s), поэтому в qBittorrent её не запускаю: проверьте раздачу в Antresol и qBittorrent вручную": "%s — Antresol couldn’t remove its copy of the torrent (%s), so it isn’t started in qBittorrent: check the torrent in Antresol and qBittorrent yourself",
 		"%s — в qBittorrent этой раздачи больше нет":                                           "%s — qBittorrent no longer has this torrent",
 		"%s — раздача осталась в qBittorrent на паузе, как была":                               "%s — the torrent stayed paused in qBittorrent, as it was",

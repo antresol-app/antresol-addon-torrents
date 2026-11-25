@@ -54,3 +54,24 @@ func TestNetErrorRedactsURL(t *testing.T) {
 		t.Fatalf("classification lost: %v", err)
 	}
 }
+
+// Credential-looking names are redacted whatever their spelling, and a
+// tracker page's words in an error are cut short.
+func TestRedactMoreSecretNames(t *testing.T) {
+	got := RedactURL("https://t.example/x?pid=PID1&pwd=PWD1&vb_login_password=PW2&staffpass=SP3&csrf_token=CT4&q=dune&page=2")
+	for _, secret := range []string{"PID1", "PWD1", "PW2", "SP3", "CT4"} {
+		if strings.Contains(got, secret) {
+			t.Fatalf("%s is left in %s", secret, got)
+		}
+	}
+	if !strings.Contains(got, "q=dune") || !strings.Contains(got, "page=2") {
+		t.Fatalf("ordinary parameters were hidden: %s", got)
+	}
+	long := pageMessage(strings.Repeat("слово ", 100))
+	if n := len([]rune(long)); n > maxPageMessage+1 {
+		t.Fatalf("a login error of %d runes", n)
+	}
+	if got := pageMessage("  a \n b\t"); got != "a b" {
+		t.Fatalf("pageMessage = %q", got)
+	}
+}

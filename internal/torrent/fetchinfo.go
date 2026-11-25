@@ -165,10 +165,8 @@ func (e *Engine) fetchOnce(ctx context.Context, spec *atorrent.TorrentSpec) ([]b
 	})
 	defer st.Close()
 	spec.Storage = st
-	spec.DisallowDataDownload = true
-	spec.DisallowDataUpload = true
 	if e.cfg.LocalOnly {
-		spec.Trackers = nil
+		spec.Trackers, spec.Sources = nil, nil // no network: not even a magnet's xs=
 	}
 	t, isNew, err := e.client.AddTorrentSpec(spec)
 	if err != nil {
@@ -178,7 +176,10 @@ func (e *Engine) fetchOnce(ctx context.Context, spec *atorrent.TorrentSpec) ([]b
 		return nil, err
 	}
 	if isNew {
-		// Drop only the torrent this fetch created.
+		// Drop only the torrent this fetch created. (TorrentSpec's
+		// DisallowData* are never read by anacrolix v1.61: the call is the
+		// switch.)
+		t.DisallowDataUpload()
 		defer t.Drop()
 	}
 	select {

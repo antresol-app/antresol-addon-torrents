@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -125,6 +126,141 @@ func TestForward_Progress(t *testing.T) {
 	evs = waitEvents(t, got, 7)
 	if len(evs) != 7 || evs[6].Name != "admin.progress" {
 		t.Fatalf("an unchanged, inactive list went out again: %+v", evs[6:])
+	}
+}
+
+// countUsers counts the asks for the profiles.
+type countUsers struct {
+	fakeUsers
+	n atomic.Int32
+}
+
+func (u *countUsers) Profiles(ctx context.Context) ([]addonkit.User, error) {
+	u.n.Add(1)
+	return u.fakeUsers.Profiles(ctx)
+}
+
+// A quiet system (nothing queued, downloading or organizing, the engine's
+// list as it was) costs the tick nothing: no table scan, no ask of the
+// core for the profiles, no post; every progressIdleEvery the list is
+// built again and sent only when it differs. Profiles are asked for only
+// when a download has an owner, and then at most every namesTTL.
+func TestPublishProgress_QuietSystemDoesNoWork(t *testing.T) {
+	e := newEnv(t)
+	users := &countUsers{fakeUsers: testUsers}
+	e.svc.o.Users = users
+	bus := &events.Bus{}
+	e.svc.o.Bus = bus
+	c, got := eventCore(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { coreadapt.Forward(ctx, bus, c); close(done) }()
+	t.Cleanup(func() { cancel(); <-done })
+	for !bus.Wants(EventLibraryProgress) || !bus.Wants(EventProgress) {
+		time.Sleep(time.Millisecond)
+	}
+	admin := func() int {
+		n := 0
+		for _, ev := range got() {
+			if ev.Name == "admin.progress" {
+				n++
+			}
+		}
+		return n
+	}
+	adultsSent := func() int {
+		n := 0
+		for _, ev := range got() {
+			if ev.Name == "progress" {
+				n++
+			}
+		}
+		return n
+	}
+	settle := func() { time.Sleep(60 * time.Millisecond) }
+	rebuildDue := func() { // as if progressIdleEvery had passed
+		e.svc.mu.Lock()
+		e.svc.prog.at = time.Now().Add(-progressIdleEvery - time.Second)
+		e.svc.mu.Unlock()
+	}
+	e.eng.put(torrent.Status{InfoHash: ihLib, Mode: torrent.ModeDownload, Status: torrent.StatusSeeding, Parked: true, Size: 10, Done: 10})
+
+	e.svc.publishProgress()
+	waitEvents(t, got, 2)
+	for i := 0; i < 5; i++ {
+		e.svc.publishProgress()
+	}
+	settle()
+	if n := admin(); n != 1 {
+		t.Fatalf("%d admin lists after 1 + 5 quiet ticks, want 1", n)
+	}
+	rebuildDue()
+	e.svc.publishProgress() // built again, the same: not sent
+	settle()
+	if n := admin(); n != 1 {
+		t.Fatalf("an unchanged list was sent again: %d", n)
+	}
+	if n := users.n.Load(); n != 0 {
+		t.Fatalf("profiles asked %d times with no download owned", n)
+	}
+	// the same list is sent again after progressResendEvery (a page whose
+	// stream was down, a post the core refused: both heal)
+	e.svc.mu.Lock()
+	e.svc.prog.adminAt = time.Now().Add(-progressResendEvery - time.Second)
+	e.svc.mu.Unlock()
+	rebuildDue()
+	e.svc.publishProgress()
+	settle()
+	if n := admin(); n != 2 {
+		t.Fatalf("%d admin lists after the resend period, want 2", n)
+	}
+	if n := adultsSent(); n != 1 {
+		t.Fatalf("the adults' list went out %d times, want 1 (its resend is not due)", n)
+	}
+	e.svc.mu.Lock()
+	e.svc.prog.adultAt = time.Now().Add(-progressResendEvery - time.Second)
+	e.svc.mu.Unlock()
+	rebuildDue()
+	e.svc.publishProgress()
+	settle()
+	if n := adultsSent(); n != 2 {
+		t.Fatalf("the adults' list went out %d times after its resend period, want 2", n)
+	}
+	if n := admin(); n != 2 {
+		t.Fatalf("%d admin lists, want 2 (no resend due)", n)
+	}
+
+	// a change shows at the next tick, not at the next rebuild
+	e.eng.put(torrent.Status{InfoHash: ihStream, Mode: torrent.ModeDownload, Status: torrent.StatusPaused, AddedByUID: "uid-1"})
+	e.svc.publishProgress()
+	settle()
+	if n := admin(); n != 3 {
+		t.Fatalf("%d admin lists after a new download, want 3", n)
+	}
+	if n := users.n.Load(); n != 1 {
+		t.Fatalf("profiles asked %d times, want 1", n)
+	}
+	e.eng.put(torrent.Status{InfoHash: ihStream, Mode: torrent.ModeDownload, Status: torrent.StatusSeeding, AddedByUID: "uid-1"})
+	e.svc.publishProgress()
+	settle()
+	if n, a := users.n.Load(), admin(); n != 1 || a != 4 {
+		t.Fatalf("profiles asked %d times (want 1: cached), %d lists (want 4)", n, a)
+	}
+
+	// something moves: every tick, and the one after it
+	e.eng.put(torrent.Status{InfoHash: ihStream, Mode: torrent.ModeDownload, Status: torrent.StatusDownloading, AddedByUID: "uid-1"})
+	e.svc.publishProgress()
+	e.svc.publishProgress()
+	e.eng.put(torrent.Status{InfoHash: ihStream, Mode: torrent.ModeDownload, Status: torrent.StatusSeeding, AddedByUID: "uid-1"})
+	e.svc.publishProgress() // the end of it
+	settle()
+	if n := admin(); n != 7 {
+		t.Fatalf("%d admin lists, want 7 (two while downloading, the end, and the four before)", n)
+	}
+	e.svc.publishProgress()
+	settle()
+	if n := admin(); n != 7 {
+		t.Fatalf("a quiet tick after the end sent a list: %d", n)
 	}
 }
 

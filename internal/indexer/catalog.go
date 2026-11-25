@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/i18n"
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/release"
@@ -83,84 +84,183 @@ type SettingSpec struct {
 type Option struct{ Value, Label string }
 
 type catalogDef struct {
-	def    *cardigann.Definition
-	entry  CatalogEntry
-	custom bool
-	raw    []byte
+	def   *cardigann.Definition
+	entry CatalogEntry
 }
 
 // Catalog holds embedded definitions and the user's ones from a directory
 // (they override embedded definitions with the same id). Safe for
 // concurrent use.
+//
+// An embedded definition is parsed when someone asks for it (a source of it
+// exists, or the «add source» list is built), not all 580 at the first
+// search, and an unchanged user file keeps its *Definition when the
+// directory is read again, so the runner of its source keeps its session.
 type Catalog struct {
 	userDir string
 	once    sync.Once // the first use loads (load)
 	mu      sync.RWMutex
-	defs    map[string]*catalogDef
-	list    []CatalogEntry
+	user    map[string]*catalogDef // by id
+	files   map[string]userFile    // by path: what Reload read of it last
+	list    []CatalogEntry         // all entries, built by List; nil = not yet
+	gen     int                    // counts Reloads: a list built before one is stale
 }
 
-var (
-	embeddedOnce sync.Once
-	embeddedDefs map[string]*catalogDef
-)
+// userFile is a user definition file as Reload last read it.
+type userFile struct {
+	mod  time.Time
+	size int64
+	def  *catalogDef // nil: it did not parse
+}
 
-// loadEmbedded parses the embedded set once per process (~0.3 s).
-func loadEmbedded() map[string]*catalogDef {
-	embeddedOnce.Do(func() {
-		embeddedDefs = map[string]*catalogDef{}
-		for _, dir := range []string{"definitions", "definitions/extra"} {
+// The embedded definitions by id (the files are not all named by their
+// id), parsed on demand and kept.
+var embedded struct {
+	once  sync.Once
+	files map[string]string // id -> file
+	mu    sync.Mutex
+	defs  map[string]*catalogDef
+	list  []CatalogEntry // every entry, built once by the first List
+}
+
+var idLine = regexp.MustCompile(`(?m)^id:\s*["']?([^\s"'#]+)`)
+
+func embeddedFiles() map[string]string {
+	embedded.once.Do(func() {
+		embedded.files, embedded.defs = map[string]string{}, map[string]*catalogDef{}
+		for _, dir := range []string{"definitions", "definitions/extra"} { // extra wins
 			files, _ := fs.Glob(embeddedFS, dir+"/*.yml")
 			for _, f := range files {
 				data, _ := embeddedFS.ReadFile(f)
-				d, err := cardigann.Parse(data)
-				if err != nil {
-					slog.Warn("indexer: skip embedded definition", "file", f, "err", err)
-					continue
+				if m := idLine.FindSubmatch(data); m != nil {
+					embedded.files[string(m[1])] = f
 				}
-				embeddedDefs[d.ID] = &catalogDef{def: d, entry: makeEntry(d, false), raw: data}
 			}
 		}
 	})
-	return embeddedDefs
+	return embedded.files
+}
+
+func parseEmbedded(file string) (*catalogDef, bool) {
+	data, _ := embeddedFS.ReadFile(file)
+	d, err := cardigann.Parse(data)
+	if err != nil {
+		slog.Warn("indexer: skip embedded definition", "file", file, "err", err)
+		return nil, false
+	}
+	return &catalogDef{def: d, entry: makeEntry(d, false)}, true
+}
+
+// embeddedDef is the embedded definition of an id, parsed the first time.
+func embeddedDef(id string) (*catalogDef, bool) {
+	file, ok := embeddedFiles()[id]
+	if !ok {
+		return nil, false
+	}
+	embedded.mu.Lock()
+	defer embedded.mu.Unlock()
+	if d, ok := embedded.defs[id]; ok {
+		return d, d != nil
+	}
+	d, ok := parseEmbedded(file)
+	embedded.defs[id] = d // nil: it does not parse, not tried again
+	return d, ok
+}
+
+// embeddedEntries is the entry of every embedded definition. The first call
+// parses them all (the «add source» screen is the only one that needs
+// that) and keeps the entries only.
+func embeddedEntries() []CatalogEntry {
+	files := embeddedFiles()
+	embedded.mu.Lock()
+	defer embedded.mu.Unlock()
+	if embedded.list == nil {
+		embedded.list = make([]CatalogEntry, 0, len(files))
+		for id, file := range files {
+			d, ok := embedded.defs[id]
+			if !ok {
+				d, _ = parseEmbedded(file)
+			}
+			if d != nil {
+				embedded.list = append(embedded.list, d.entry)
+			}
+		}
+	}
+	return embedded.list
 }
 
 // NewCatalog is the catalog of the embedded definitions and *.yml from
-// userDir (may be "" or missing), read on first use: parsing them takes a
-// tenth of a second and some 100 MB of short-lived memory, which the
-// server's start need not pay. Broken user files are logged and skipped.
+// userDir (may be "" or missing), read on first use. Broken user files are
+// logged and skipped.
 func NewCatalog(userDir string) *Catalog {
 	return &Catalog{userDir: userDir}
 }
 
-// load reads the catalog the first time it is used.
+// load reads the user definitions the first time the catalog is used.
 func (c *Catalog) load() { c.once.Do(c.Reload) }
 
-// Reload re-reads the user directory.
+// Reload re-reads the user directory. A file that did not change since it
+// was read keeps its parsed definition.
 func (c *Catalog) Reload() {
-	defs := map[string]*catalogDef{}
-	for id, d := range loadEmbedded() {
-		defs[id] = d
-	}
+	c.mu.RLock()
+	prev := c.files
+	c.mu.RUnlock()
+	user, files := map[string]*catalogDef{}, map[string]userFile{}
 	if c.userDir != "" {
-		files, _ := filepath.Glob(filepath.Join(c.userDir, "*.yml"))
+		yml, _ := filepath.Glob(filepath.Join(c.userDir, "*.yml"))
 		yaml2, _ := filepath.Glob(filepath.Join(c.userDir, "*.yaml"))
-		for _, f := range append(files, yaml2...) {
-			data, err := os.ReadFile(f)
+		for _, f := range append(yml, yaml2...) {
+			st, err := os.Stat(f)
 			if err != nil {
 				slog.Warn("indexer: read user definition", "file", f, "err", err)
 				continue
 			}
-			d, err := cardigann.Parse(data)
-			if err != nil {
-				slog.Warn("indexer: skip user definition", "file", f, "err", err)
-				continue
+			uf, ok := prev[f]
+			if !ok || !uf.mod.Equal(st.ModTime()) || uf.size != st.Size() {
+				uf = userFile{mod: st.ModTime(), size: st.Size()}
+				data, err := os.ReadFile(f)
+				if err != nil {
+					slog.Warn("indexer: read user definition", "file", f, "err", err)
+					continue
+				}
+				if d, err := cardigann.Parse(data); err != nil {
+					slog.Warn("indexer: skip user definition", "file", f, "err", err)
+				} else {
+					uf.def = &catalogDef{def: d, entry: makeEntry(d, true)}
+				}
 			}
-			defs[d.ID] = &catalogDef{def: d, entry: makeEntry(d, true), custom: true, raw: data}
+			files[f] = uf
+			if uf.def != nil {
+				user[uf.def.def.ID] = uf.def
+			}
 		}
 	}
-	list := make([]CatalogEntry, 0, len(defs)+1)
-	for id, d := range defs {
+	c.mu.Lock()
+	c.user, c.files, c.list = user, files, nil
+	c.gen++
+	c.mu.Unlock()
+}
+
+func isRussian(lang string) bool { return strings.HasPrefix(strings.ToLower(lang), "ru") }
+
+// entries is every entry, Russian-language trackers first. The user's
+// definitions replace the embedded ones of the same id, the synthetic OPDS
+// entry is last of its language.
+func (c *Catalog) entries() []CatalogEntry {
+	c.load()
+	c.mu.RLock()
+	list, user, gen := c.list, c.user, c.gen
+	c.mu.RUnlock()
+	if list != nil {
+		return list
+	}
+	list = make([]CatalogEntry, 0, len(embeddedEntries())+len(user)+1)
+	for _, e := range embeddedEntries() {
+		if _, over := user[e.ID]; !over && e.ID != OPDSDefinitionID {
+			list = append(list, e)
+		}
+	}
+	for id, d := range user {
 		if id != OPDSDefinitionID {
 			list = append(list, d.entry)
 		}
@@ -174,24 +274,23 @@ func (c *Catalog) Reload() {
 		return strings.ToLower(list[i].Name) < strings.ToLower(list[j].Name)
 	})
 	c.mu.Lock()
-	c.defs, c.list = defs, list
+	if c.gen == gen {
+		c.list = list
+	}
 	c.mu.Unlock()
+	return list
 }
-
-func isRussian(lang string) bool { return strings.HasPrefix(strings.ToLower(lang), "ru") }
 
 // List returns entries matching q (name, id, description or site address;
 // empty q = all). Russian-language trackers come first.
 func (c *Catalog) List(q string) []CatalogEntry {
-	c.load()
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	list := c.entries()
 	nq := release.Normalize(q)
 	if nq == "" {
-		return append([]CatalogEntry(nil), c.list...)
+		return append([]CatalogEntry(nil), list...)
 	}
 	var byName, other []CatalogEntry
-	for _, e := range c.list {
+	for _, e := range list {
 		switch {
 		case strings.Contains(release.Normalize(e.Name), nq) || strings.Contains(release.Normalize(e.ID), nq):
 			byName = append(byName, e)
@@ -202,15 +301,24 @@ func (c *Catalog) List(q string) []CatalogEntry {
 	return append(byName, other...)
 }
 
+// def is the catalog's definition of an id: the user's, else the embedded.
+func (c *Catalog) def(id string) (*catalogDef, bool) {
+	c.load()
+	c.mu.RLock()
+	d, ok := c.user[id]
+	c.mu.RUnlock()
+	if ok {
+		return d, true
+	}
+	return embeddedDef(id)
+}
+
 // Get returns one entry.
 func (c *Catalog) Get(id string) (CatalogEntry, bool) {
 	if id == OPDSDefinitionID {
 		return opdsEntry, true
 	}
-	c.load()
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	d, ok := c.defs[id]
+	d, ok := c.def(id)
 	if !ok {
 		return CatalogEntry{}, false
 	}
@@ -222,10 +330,7 @@ var ErrNoDefinition = errors.New("описание этого трекера н�
 
 // Definition returns the parsed definition. Callers must not modify it.
 func (c *Catalog) Definition(id string) (*cardigann.Definition, error) {
-	c.load()
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	d, ok := c.defs[id]
+	d, ok := c.def(id)
 	if !ok {
 		return nil, fmt.Errorf("%w (%s)", ErrNoDefinition, id)
 	}

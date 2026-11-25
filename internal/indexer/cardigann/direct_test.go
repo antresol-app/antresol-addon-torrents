@@ -275,8 +275,14 @@ func TestOpenDirectStalledBodyFails(t *testing.T) {
 	}
 }
 
-// Strict runners do not follow a redirect from https to http.
+// Strict runners do not follow a redirect from https to http. A request that
+// carries the definition's headers (an API key) never does, strict or not
+// (TestRedirectWithSecretsNeverDowngrades): this site sends none.
 func TestStrictRefusesDowngrade(t *testing.T) {
+	noKey := strings.Replace(slowDef, "  headers:\n    X-Api-Key: [\"k1\"]\n", "", 1)
+	if noKey == slowDef {
+		t.Fatal("the definition keeps its header")
+	}
 	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/epub+zip")
 		io.WriteString(w, "BOOK")
@@ -292,7 +298,7 @@ func TestStrictRefusesDowngrade(t *testing.T) {
 	}))
 	defer tls.Close()
 	for _, strict := range []bool{false, true} {
-		r := &Runner{Def: mustParse(t, slowDef), Settings: map[string]string{"sitelink": tls.URL + "/"}, HTTP: tls.Client(), Strict: strict}
+		r := &Runner{Def: mustParse(t, noKey), Settings: map[string]string{"sitelink": tls.URL + "/"}, HTTP: tls.Client(), Strict: strict}
 		resp, err := r.OpenDirect(context.Background(), tls.URL+"/book/1")
 		if resp != nil {
 			resp.Body.Close()

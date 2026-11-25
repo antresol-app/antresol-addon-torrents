@@ -11,7 +11,7 @@ import { Link, useNavigate } from "react-router";
 import m from "./Manage.module.css";
 import styles from "./Sources.module.css";
 
-const { Button, ButtonLink, SegmentedControl, Sheet, TextField } = ui
+const { Button, ButtonLink, SegmentedControl, Sheet, Spinner, TextField } = ui
 
 export const DEFAULT_PROWLARR_DB = "/prowlarr/prowlarr.db";
 
@@ -192,7 +192,7 @@ export function Sources() {
       )}
       {state.status === "loading" && (
         <div className={m.spinnerRow} role="status">
-          <span className={m.spinner} aria-hidden /> {t("sources.loading")}
+          <Spinner track className={m.spinner} /> {t("sources.loading")}
         </div>
       )}
       {state.status === "error" && (

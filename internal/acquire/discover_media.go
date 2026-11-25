@@ -162,16 +162,3 @@ func (s *Service) catalogErr(ctx context.Context, source string, err error) erro
 	s.log.Warn("catalog search", "source", source, "err", err)
 	return wrapErr(ErrUnavailable, CatalogOffline, err)
 }
-
-// LibraryItemOf is the library item of a title found by «Найти и добавить»
-// (a movie or series by its TMDB id, an album by artist and title, a book
-// or audiobook by author and title); false when the library has none, or
-// for a manga, which has no lookup.
-func (s *Service) LibraryItemOf(ctx context.Context, kind string, tmdbID int, title, artist string) (int64, bool) {
-	a := acquisition{Kind: kind, TMDBID: tmdbID, Title: title, Meta: acquisitionMeta{Artist: artist, Author: artist}}
-	it, ok := s.libraryItem(ctx, a)
-	if !ok {
-		return 0, false
-	}
-	return it.ID, true
-}

@@ -17,6 +17,7 @@ import (
 	"github.com/antresol-app/antresol-addon-torrents/internal/acquire"
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/i18n"
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/tracking"
+	"github.com/antresol-app/antresol-addon-torrents/internal/httpx"
 	"github.com/antresol-app/antresol-addon-torrents/internal/indexer"
 	"github.com/antresol-app/antresol-addon-torrents/internal/pinned"
 	"github.com/antresol-app/antresol-addon-torrents/internal/torrent"
@@ -126,18 +127,18 @@ func pinErr(w http.ResponseWriter, r *http.Request, what string, err error) {
 	var ie *i18n.Error
 	switch {
 	case errors.Is(err, pinned.ErrNotPinned):
-		writeErr(w, r, http.StatusNotFound, msgPinNotPinned)
+		httpx.WriteErr(w, r, http.StatusNotFound, msgPinNotPinned)
 	case errors.As(err, &ie):
 		unprocessable(w, r, err)
 	case errors.Is(err, indexer.ErrNotFound):
-		writeErr(w, r, http.StatusNotFound, "Источник не найден")
+		httpx.WriteErr(w, r, http.StatusNotFound, "Источник не найден")
 	default:
 		if _, ok := acquire.UserMessage(err); ok {
-			acquireErr(w, r, what, err)
+			httpx.AcquireErr(w, r, "followapi", what, err)
 			return
 		}
 		slog.Warn("followapi: "+what, "err", err)
-		writeErr(w, r, http.StatusBadGateway, "Не удалось получить раздачу — проверьте ссылку")
+		httpx.WriteErr(w, r, http.StatusBadGateway, "Не удалось получить раздачу — проверьте ссылку")
 	}
 }
 
@@ -152,11 +153,11 @@ func titleParams(w http.ResponseWriter, r *http.Request) (string, int64, bool) {
 	kind := r.PathValue("kind")
 	id, err := strconv.ParseInt(r.PathValue("tmdbId"), 10, 64)
 	if kind != "series" && kind != "movie" {
-		writeErr(w, r, http.StatusBadRequest, "Неизвестный раздел")
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Неизвестный раздел")
 		return "", 0, false
 	}
 	if err != nil || id <= 0 {
-		writeErr(w, r, http.StatusBadRequest, "Неверный id")
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Неверный id")
 		return "", 0, false
 	}
 	return kind, id, true
@@ -172,7 +173,7 @@ func (p *pinnedAPI) lookup(w http.ResponseWriter, r *http.Request) (kind string,
 	}
 	t, found, err := p.tracking().TitleByTMDB(r.Context(), kind, tmdbID)
 	if err != nil {
-		internalErr(w, r, "pinned title", err)
+		httpx.InternalErr(w, r, "followapi", "pinned title", err)
 		return "", t, false, false
 	}
 	if !found {
@@ -180,11 +181,11 @@ func (p *pinnedAPI) lookup(w http.ResponseWriter, r *http.Request) (kind string,
 	}
 	ok, err = titleVisible(r.Context(), p.Library, user(r), t)
 	if err != nil {
-		internalErr(w, r, "pinned gate", err)
+		httpx.InternalErr(w, r, "followapi", "pinned gate", err)
 		return "", t, false, false
 	}
 	if !ok {
-		writeErr(w, r, http.StatusNotFound, "Не найдено") // a hidden title is not told apart
+		httpx.WriteErr(w, r, http.StatusNotFound, "Не найдено") // a hidden title is not told apart
 		return "", t, false, false
 	}
 	return kind, t, found, true
@@ -203,7 +204,7 @@ func (p *pinnedAPI) ensure(w http.ResponseWriter, r *http.Request, name, poster 
 	}
 	t, err := p.tracking().EnsureTitle(r.Context(), kind, t.TMDBID, strings.TrimSpace(name), poster)
 	if err != nil {
-		internalErr(w, r, "pinned title", err)
+		httpx.InternalErr(w, r, "followapi", "pinned title", err)
 		return "", t, false
 	}
 	return kind, t, true
@@ -216,7 +217,7 @@ func (p *pinnedAPI) checkLink(w http.ResponseWriter, r *http.Request, sourceID i
 		return true
 	}
 	if sourceID <= 0 {
-		writeErr(w, r, http.StatusBadRequest, "Источник не найден")
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Источник не найден")
 		return false
 	}
 	if err := p.Pins.Indexer.CheckReleaseLink(r.Context(), sourceID, link); err != nil {
@@ -235,7 +236,7 @@ func (p *pinnedAPI) checkLink(w http.ResponseWriter, r *http.Request, sourceID i
 func (p *pinnedAPI) ownLinkKnown(w http.ResponseWriter, r *http.Request, link string) bool {
 	srcs, err := p.Pins.Indexer.Sources(r.Context())
 	if err != nil {
-		internalErr(w, r, "pin sources", err)
+		httpx.InternalErr(w, r, "followapi", "pin sources", err)
 		return false
 	}
 	for _, s := range srcs {
@@ -256,7 +257,7 @@ func (p *pinnedAPI) get(w http.ResponseWriter, r *http.Request) {
 	if found {
 		pin, ok, err := p.Pins.ByTitle(r.Context(), t.ID)
 		if err != nil {
-			internalErr(w, r, "pinned get", err)
+			httpx.InternalErr(w, r, "followapi", "pinned get", err)
 			return
 		}
 		if ok {
@@ -275,12 +276,12 @@ func (p *pinnedAPI) pinRelease(w http.ResponseWriter, r *http.Request) {
 		Name         string `json:"name"`
 		Poster       string `json:"poster"` // TMDB path
 	}
-	if !decode(w, r, &in) {
+	if !httpx.Decode(w, r, &in) {
 		return
 	}
 	in.Link = strings.TrimSpace(in.Link)
 	if in.Link == "" {
-		writeErr(w, r, http.StatusBadRequest, msgPinNoInput)
+		httpx.WriteErr(w, r, http.StatusBadRequest, msgPinNoInput)
 		return
 	}
 	if !p.checkLink(w, r, in.SourceID, in.Link) {
@@ -309,7 +310,7 @@ func (p *pinnedAPI) pinRelease(w http.ResponseWriter, r *http.Request) {
 func ownFile(w http.ResponseWriter, r *http.Request, b64 string) ([]byte, bool) {
 	b64 = strings.TrimSpace(b64)
 	if base64.RawStdEncoding.DecodedLen(len(strings.TrimRight(b64, "="))) > maxOwnTorrent {
-		writeErr(w, r, http.StatusBadRequest, msgPinTooLarge)
+		httpx.WriteErr(w, r, http.StatusBadRequest, msgPinTooLarge)
 		return nil, false
 	}
 	file, err := base64.StdEncoding.DecodeString(b64)
@@ -317,11 +318,11 @@ func ownFile(w http.ResponseWriter, r *http.Request, b64 string) ([]byte, bool) 
 		file, err = base64.RawStdEncoding.DecodeString(b64)
 	}
 	if err != nil {
-		writeErr(w, r, http.StatusBadRequest, msgBadRequest)
+		httpx.WriteErr(w, r, http.StatusBadRequest, msgBadRequest)
 		return nil, false
 	}
 	if len(file) > maxOwnTorrent {
-		writeErr(w, r, http.StatusBadRequest, msgPinTooLarge)
+		httpx.WriteErr(w, r, http.StatusBadRequest, msgPinTooLarge)
 		return nil, false
 	}
 	return file, true
@@ -332,16 +333,16 @@ func ownFile(w http.ResponseWriter, r *http.Request, b64 string) ([]byte, bool) 
 // only: a multipart form is refused.
 func (p *pinnedAPI) own(w http.ResponseWriter, r *http.Request) {
 	if mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); strings.HasPrefix(mt, "multipart/") {
-		writeErr(w, r, http.StatusBadRequest, msgBadRequest)
+		httpx.WriteErr(w, r, http.StatusBadRequest, msgBadRequest)
 		return
 	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, maxOwnBody+1))
 	if err != nil {
-		writeErr(w, r, http.StatusBadRequest, msgBadRequest)
+		httpx.WriteErr(w, r, http.StatusBadRequest, msgBadRequest)
 		return
 	}
 	if len(body) > maxOwnBody {
-		writeErr(w, r, http.StatusBadRequest, msgPinTooLarge)
+		httpx.WriteErr(w, r, http.StatusBadRequest, msgPinTooLarge)
 		return
 	}
 	var in struct {
@@ -351,7 +352,7 @@ func (p *pinnedAPI) own(w http.ResponseWriter, r *http.Request) {
 		Poster string `json:"poster"`
 	}
 	if err := json.Unmarshal(body, &in); err != nil {
-		writeErr(w, r, http.StatusBadRequest, msgBadRequest)
+		httpx.WriteErr(w, r, http.StatusBadRequest, msgBadRequest)
 		return
 	}
 	var file []byte
@@ -397,7 +398,7 @@ func (p *pinnedAPI) unpin(w http.ResponseWriter, r *http.Request) {
 	}
 	if found {
 		if err := p.Pins.Unpin(r.Context(), t.ID); err != nil {
-			internalErr(w, r, "unpin", err)
+			httpx.InternalErr(w, r, "followapi", "unpin", err)
 			return
 		}
 	}
@@ -411,16 +412,16 @@ func (p *pinnedAPI) pinOf(w http.ResponseWriter, r *http.Request) (string, track
 		return "", t, pinned.Pin{}, false
 	}
 	if !found {
-		writeErr(w, r, http.StatusNotFound, msgPinNotPinned)
+		httpx.WriteErr(w, r, http.StatusNotFound, msgPinNotPinned)
 		return "", t, pinned.Pin{}, false
 	}
 	pin, has, err := p.Pins.ByTitle(r.Context(), t.ID)
 	if err != nil {
-		internalErr(w, r, "pinned get", err)
+		httpx.InternalErr(w, r, "followapi", "pinned get", err)
 		return "", t, pin, false
 	}
 	if !has {
-		writeErr(w, r, http.StatusNotFound, msgPinNotPinned)
+		httpx.WriteErr(w, r, http.StatusNotFound, msgPinNotPinned)
 		return "", t, pin, false
 	}
 	return kind, t, pin, true
@@ -516,7 +517,7 @@ func (p *pinnedAPI) playEpisode(w http.ResponseWriter, r *http.Request) {
 		Season  int `json:"season"`
 		Episode int `json:"episode"`
 	}
-	if r.ContentLength != 0 && !decode(w, r, &in) {
+	if r.ContentLength != 0 && !httpx.Decode(w, r, &in) {
 		return
 	}
 	kind, t, pin, ok := p.pinOf(w, r)
@@ -526,12 +527,12 @@ func (p *pinnedAPI) playEpisode(w http.ResponseWriter, r *http.Request) {
 	u := user(r)
 	req, err := streamRequest(u, kind, t, pin, in.Season, in.Episode)
 	if err != nil {
-		internalErr(w, r, "pinned play source", err)
+		httpx.InternalErr(w, r, "followapi", "pinned play source", err)
 		return
 	}
 	out, err := p.Acquire.Acquire(r.Context(), req)
 	if err != nil {
-		acquireErr(w, r, "pinned play", err)
+		httpx.AcquireErr(w, r, "followapi", "pinned play", err)
 		return
 	}
 	p.added()
@@ -540,7 +541,7 @@ func (p *pinnedAPI) playEpisode(w http.ResponseWriter, r *http.Request) {
 		if p.WatchError != nil {
 			p.WatchError(w, r, "pinned play", err)
 		} else {
-			acquireErr(w, r, "pinned play", err)
+			httpx.AcquireErr(w, r, "followapi", "pinned play", err)
 		}
 		return
 	}
@@ -555,7 +556,7 @@ func (p *pinnedAPI) downloadEpisodes(w http.ResponseWriter, r *http.Request) {
 		Season   int   `json:"season"`
 		Episodes []int `json:"episodes"`
 	}
-	if !decode(w, r, &in) {
+	if !httpx.Decode(w, r, &in) {
 		return
 	}
 	kind, t, pin, ok := p.pinOf(w, r)
@@ -563,12 +564,12 @@ func (p *pinnedAPI) downloadEpisodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if kind != "series" || len(in.Episodes) == 0 {
-		writeErr(w, r, http.StatusUnprocessableEntity, msgPinNoEpisodes)
+		httpx.WriteErr(w, r, http.StatusUnprocessableEntity, msgPinNoEpisodes)
 		return
 	}
 	eps, err := p.tracking().Episodes(r.Context(), t.ID)
 	if err != nil {
-		internalErr(w, r, "pinned download episodes", err)
+		httpx.InternalErr(w, r, "followapi", "pinned download episodes", err)
 		return
 	}
 	byEp := pinned.EpisodesOf(pin.Files, pinned.DefaultSeason(eps))
@@ -579,20 +580,20 @@ func (p *pinnedAPI) downloadEpisodes(w http.ResponseWriter, r *http.Request) {
 	slices.Sort(files)
 	files = slices.Compact(files)
 	if len(files) == 0 {
-		writeErr(w, r, http.StatusConflict, msgPinNoSuchEps)
+		httpx.WriteErr(w, r, http.StatusConflict, msgPinNoSuchEps)
 		return
 	}
 	u := user(r)
 	link, src, err := pinLink(pin)
 	if err != nil {
-		internalErr(w, r, "pinned download source", err)
+		httpx.InternalErr(w, r, "followapi", "pinned download source", err)
 		return
 	}
 	req := acquire.AcquireRequest{TMDBID: int(t.TMDBID), Kind: acquire.KindSeries, Season: in.Season,
 		ReleaseLink: link, SourceID: src, UserID: u.ID, UserUID: u.UID, CheckLink: !u.IsAdmin}
 	out, err := p.Acquire.AcquirePinnedFiles(r.Context(), pin.InfoHash, req, files)
 	if err != nil {
-		acquireErr(w, r, "pinned download", err)
+		httpx.AcquireErr(w, r, "followapi", "pinned download", err)
 		return
 	}
 	p.added()

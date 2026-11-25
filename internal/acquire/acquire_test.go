@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -181,6 +182,13 @@ func (e *fakeEngine) List() []torrent.Status {
 	for _, s := range e.st {
 		out = append(out, s)
 	}
+	// as the engine's: oldest first, then by infohash
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].AddedAt.Equal(out[j].AddedAt) {
+			return out[i].AddedAt.Before(out[j].AddedAt)
+		}
+		return out[i].InfoHash < out[j].InfoHash
+	})
 	return out
 }
 func (e *fakeEngine) Remove(_ context.Context, ih string, deleteData bool) error {
@@ -705,6 +713,9 @@ func TestOrganizeClaims_ReusedID(t *testing.T) {
 		t.Fatalf("downloads %+v", dls)
 	}
 	users.Names[3], users.UIDs[3] = "Новый", "B" // deleted, and id 3 given to a new profile
+	e.svc.mu.Lock()
+	e.svc.namesAt = time.Time{} // the names read before are kept for namesTTL: as if it had passed
+	e.svc.mu.Unlock()
 	if n := named(); n != "" {
 		t.Fatalf("B named as the asker: %q", n)
 	}

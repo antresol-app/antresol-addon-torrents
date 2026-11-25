@@ -11,7 +11,7 @@ import (
 // The file browser moves, renames and trashes folders that may hold torrent
 // data. A torrent whose files vanish under it would download them again, so
 // file operations first ask PlanRelocate what happens to each torrent: the
-// ones that can follow the move are re-pointed by Relocate (data kept,
+// ones that can follow the move are re-pointed by BeginRelocate (data kept,
 // nothing re-downloaded or re-hashed), the others must be stopped (removed
 // from the client, data kept) before the files are touched.
 
@@ -46,7 +46,7 @@ func (en *entry) follows(from, to string) (newSave string, ok bool) {
 
 // PlanRelocate lists the torrents touched when the file or folder from is
 // moved to to (to == "": trashed or deleted). follow can be re-pointed with
-// Relocate; stop hold data at or inside from, or contain from, and must be
+// BeginRelocate; stop hold data at or inside from, or contain from, and must be
 // stopped first.
 func (e *Engine) PlanRelocate(from, to string) (follow, stop []string) {
 	e.mu.Lock()
@@ -95,24 +95,7 @@ func (r *Relocation) Keys() []string {
 	return keys
 }
 
-// Relocate runs rename (which moves from to to on disk) with every torrent
-// that can follow (see PlanRelocate) dropped from the client, then points
-// them at the new place and attaches them again. Piece state is kept. When
-// rename fails nothing is re-pointed. Torrents that cannot follow are left
-// alone: callers stop them first.
-func (e *Engine) Relocate(ctx context.Context, from, to string, rename func() error) error {
-	r, err := e.BeginRelocate(ctx, from, to)
-	if err != nil {
-		return err
-	}
-	rerr := rename()
-	if ferr := r.Finish(ctx, rerr == nil); rerr == nil {
-		return ferr
-	}
-	return rerr
-}
-
-// BeginRelocate is the first half of Relocate: the torrents that follow the
+// BeginRelocate begins a relocation (Finish ends it): the torrents that follow the
 // move are marked moving and dropped from the client. Finish must follow.
 func (e *Engine) BeginRelocate(ctx context.Context, from, to string) (*Relocation, error) {
 	e.mu.Lock()

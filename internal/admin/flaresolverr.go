@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/antresol-app/antresol-addon-torrents/internal/httpx"
 	"github.com/antresol-app/antresol/addonkit"
 )
 
@@ -82,16 +83,16 @@ func (s *settings) putFlareSolverr(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		URL *string `json:"url"`
 	}
-	if !decode(w, r, &in) {
+	if !httpx.Decode(w, r, &in) {
 		return
 	}
 	if in.URL == nil {
-		writeErr(w, r, http.StatusBadRequest, "Неверный запрос")
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Неверный запрос")
 		return
 	}
 	u, ok := normalizeSolverURL(*in.URL)
 	if !ok {
-		writeErr(w, r, http.StatusUnprocessableEntity, "Укажите адрес вида http://flaresolverr:8191")
+		httpx.WriteErr(w, r, http.StatusUnprocessableEntity, "Укажите адрес вида http://flaresolverr:8191")
 		return
 	}
 	var out flareSolverrView
@@ -102,13 +103,13 @@ func (s *settings) putFlareSolverr(w http.ResponseWriter, r *http.Request) {
 		}
 		v, problem := pingSolver(r.Context(), client, u)
 		if problem != "" {
-			writeErr(w, r, http.StatusUnprocessableEntity, problem)
+			httpx.WriteErr(w, r, http.StatusUnprocessableEntity, problem)
 			return
 		}
 		out.Version = v
 	}
 	if err := s.Settings.SetFlareSolverrURL(r.Context(), u); err != nil {
-		internalErr(w, r, "flaresolverr", err)
+		httpx.InternalErr(w, r, "admin", "flaresolverr", err)
 		return
 	}
 	out.URL = u

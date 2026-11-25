@@ -28,8 +28,11 @@ var (
 	// ErrNoSolver comes with ErrCloudflare when no FlareSolverr address is set
 	ErrNoSolver    = errors.New("FlareSolverr не задан")
 	ErrUnavailable = errors.New("сайт недоступен")
-	ErrNotTorrent  = errors.New("сайт вернул не торрент-файл")
-	ErrBadResponse = errors.New("сайт ответил не так, как ожидалось")
+	// ErrLocalAddress: FlareSolverr was not asked to fetch a page of an
+	// address on the local network (see Runner.SolverHostOK)
+	ErrLocalAddress = errors.New("адрес сайта в домашней сети")
+	ErrNotTorrent   = errors.New("сайт вернул не торрент-файл")
+	ErrBadResponse  = errors.New("сайт ответил не так, как ожидалось")
 )
 
 // Runner executes one definition with one set of user settings.
@@ -45,6 +48,13 @@ type Runner struct {
 	// SolverHTTP reaches FlareSolverr (default: HTTP's transport). Set it
 	// when HTTP refuses the home network, where FlareSolverr usually runs.
 	SolverHTTP *http.Client
+	// SolverHostOK, when set, is asked whether FlareSolverr may fetch a
+	// host. Its browser resolves names itself and follows redirects, past
+	// the dial check HTTP has: a site that answered our guarded request
+	// with a challenge must not get a LAN page fetched and parsed through
+	// the solver. It is asked about the page's host before a solve and
+	// about the host the solve ended on.
+	SolverHostOK func(ctx context.Context, host string) bool
 	// SolverGate admits one FlareSolverr request at a time; share one
 	// between every runner of the process. Nil: a gate of this runner's own.
 	SolverGate *SolverGate
@@ -422,6 +432,7 @@ func (r *Runner) fetchTorrent(ctx context.Context, link, method string) (Downloa
 }
 
 func (r *Runner) fetchTorrentReq(ctx context.Context, req *request) (DownloadResult, error) {
+	req.limit = maxBody
 	resp, err := r.fetchRelogin(ctx, req, notTorrent)
 	if err != nil {
 		if errors.Is(err, errSessionLost) {

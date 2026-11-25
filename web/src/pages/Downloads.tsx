@@ -12,7 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { DownloadRow } from './DownloadRow'
 import m from './Manage.module.css'
 
-const { Button, SegmentedControl, GroupedSection } = ui
+const { Button, GroupedSection, SegmentedControl, Spinner } = ui
 
 export { directStatusLabel, replacePath } from './DownloadRow'
 
@@ -229,7 +229,7 @@ export function Downloads() {
       )}
       {state.status === 'loading' && (
         <div className={m.spinnerRow} role="status">
-          <span className={m.spinner} aria-hidden /> {t('downloads.loading')}
+          <Spinner track className={m.spinner} /> {t('downloads.loading')}
         </div>
       )}
       {state.status === 'error' && (

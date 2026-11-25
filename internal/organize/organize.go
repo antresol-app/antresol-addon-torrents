@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unicode/utf8"
@@ -663,7 +665,11 @@ func Place(ctx context.Context, src, dst string) (string, error) {
 	}
 	ext := filepath.Ext(dst)
 	stem := strings.TrimSuffix(dst, ext)
+	raced := 0 // times a name was judged again after another job took it
 	for n := 1; ; n++ {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
 		cand := dst
 		if n > 1 {
 			cand = fmt.Sprintf("%s (%d)%s", stem, n, ext)
@@ -683,10 +689,24 @@ func Place(ctx context.Context, src, dst string) (string, error) {
 		if !errors.Is(err, os.ErrNotExist) {
 			return "", err
 		}
-		if err := linkFile(src, cand); err == nil {
-			return cand, nil
+		if _, lerr := os.Lstat(cand); lerr == nil {
+			// a dangling symlink: not there for Stat, taken for link and copy
+			if n > 20 {
+				return "", i18n.Errorf(msgExists, dst)
+			}
+			continue
 		}
-		return cand, copyFile(ctx, src, cand)
+		err = linkFile(src, cand)
+		if err != nil && !errors.Is(err, fs.ErrExist) {
+			err = copyFile(ctx, src, cand) // no links here (another file system)
+		}
+		if errors.Is(err, fs.ErrExist) {
+			if raced++; raced <= 3 {
+				n-- // another job placed cand meanwhile: judge it again
+			}
+			continue
+		}
+		return cand, err
 	}
 }
 
@@ -722,17 +742,24 @@ func (c ctxReader) Read(p []byte) (int, error) {
 	return c.r.Read(p)
 }
 
+// publishMu makes "dst is free" and the rename into it one step: two jobs
+// placing the same name never replace each other's file.
+var publishMu sync.Mutex
+
+// copyFile copies src to dst through a private partial file beside dst.
+// An existing dst is never replaced: the error is fs.ErrExist.
 func copyFile(ctx context.Context, src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
 		return err
 	}
 	defer in.Close()
-	tmp := dst + PartialSuffix
-	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	f, err := os.CreateTemp(filepath.Dir(dst), filepath.Base(dst)+".*"+PartialSuffix)
 	if err != nil {
 		return err
 	}
+	tmp := f.Name()
+	f.Chmod(0o644) // best effort (CreateTemp makes it 0600)
 	if _, err := io.Copy(f, ctxReader{ctx, in}); err != nil {
 		f.Close()
 		os.Remove(tmp)
@@ -750,7 +777,15 @@ func copyFile(ctx context.Context, src, dst string) error {
 	if st, err := in.Stat(); err == nil {
 		os.Chtimes(tmp, st.ModTime(), st.ModTime()) // marks the copy as ours (see place)
 	}
-	if err := os.Rename(tmp, dst); err != nil {
+	publishMu.Lock()
+	_, err = os.Lstat(dst)
+	if err == nil {
+		err = &fs.PathError{Op: "copy", Path: dst, Err: fs.ErrExist}
+	} else if errors.Is(err, fs.ErrNotExist) {
+		err = os.Rename(tmp, dst)
+	}
+	publishMu.Unlock()
+	if err != nil {
 		os.Remove(tmp)
 		return err
 	}

@@ -270,3 +270,20 @@ func TestFailedReattachClearsUploadFlag(t *testing.T) {
 		}
 	}
 }
+
+// Relocate runs rename (which moves from to to on disk) with every torrent
+// that can follow (see PlanRelocate) dropped from the client, then points
+// them at the new place and attaches them again. Piece state is kept. When
+// rename fails nothing is re-pointed. Torrents that cannot follow are left
+// alone: callers stop them first.
+func (e *Engine) Relocate(ctx context.Context, from, to string, rename func() error) error {
+	r, err := e.BeginRelocate(ctx, from, to)
+	if err != nil {
+		return err
+	}
+	rerr := rename()
+	if ferr := r.Finish(ctx, rerr == nil); rerr == nil {
+		return ferr
+	}
+	return rerr
+}

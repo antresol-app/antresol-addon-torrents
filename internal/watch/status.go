@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/antresol-app/antresol-addon-torrents/internal/httpx"
 	"github.com/antresol-app/antresol/addonkit"
 )
 
@@ -19,7 +20,7 @@ func (h *handlers) status(w http.ResponseWriter, r *http.Request) {
 	}
 	ih := strings.ToLower(r.PathValue("ih"))
 	if !validIH(ih) {
-		writeErr(w, r, http.StatusNotFound, "Раздача не найдена")
+		httpx.WriteErr(w, r, http.StatusNotFound, "Раздача не найдена")
 		return
 	}
 	st, err := h.Acquire.TorrentStatus(ih, file)

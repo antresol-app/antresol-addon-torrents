@@ -17,7 +17,7 @@ import type { ReleaseFile, ReleaseFiles, ReleaseFilesRequest } from '../types'
 import { tr, useT } from '../i18n'
 import styles from './TrackPicker.module.css'
 
-const { Button } = ui
+const { Button, Spinner } = ui
 
 export interface TrackPickerProps {
   request: ReleaseFilesRequest
@@ -179,7 +179,7 @@ export function TrackPicker({ request, onBack, onConfirm, busy, error, preset = 
     }
     return (
       <div className={styles.state} role="status">
-        <span className={styles.spinner} aria-hidden />
+        <Spinner track className={styles.spinner} />
         {t('comp.tracks.whole')}
       </div>
     )
@@ -187,7 +187,7 @@ export function TrackPicker({ request, onBack, onConfirm, busy, error, preset = 
   if (state.status === 'loading') {
     return (
       <div className={styles.state} role="status">
-        <span className={styles.spinner} aria-hidden />
+        <Spinner track className={styles.spinner} />
         {t('comp.tracks.loading')}
         {/* not announced each second: the status says what happens */}
         <span className={styles.waited} aria-hidden>

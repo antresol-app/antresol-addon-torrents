@@ -250,6 +250,9 @@ func (r *Runner) selectElement(resp *response, sel *SelectorField, vars map[stri
 	return el, nil
 }
 
+// maxXMLDepth: a feed nested deeper is not a feed.
+const maxXMLDepth = 256
+
 // parseXMLDocument builds a DOM from XML with lower-cased local names so
 // CSS selectors work as with AngleSharp's XML parser (and <link> keeps its
 // text, which an HTML parser would drop).
@@ -271,6 +274,9 @@ func parseXMLDocument(text string) (*goquery.Document, error) {
 		top := stack[len(stack)-1]
 		switch t := tok.(type) {
 		case xml.StartElement:
+			if len(stack) > maxXMLDepth {
+				return nil, fmt.Errorf("xml: nested more than %d levels", maxXMLDepth)
+			}
 			n := &html.Node{Type: html.ElementNode, Data: strings.ToLower(t.Name.Local)}
 			for _, a := range t.Attr {
 				n.Attr = append(n.Attr, html.Attribute{Key: strings.ToLower(a.Name.Local), Val: a.Value})

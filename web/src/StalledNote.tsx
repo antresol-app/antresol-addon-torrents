@@ -1,8 +1,7 @@
 // The quiet line under a download that makes no headway: why («Нет
 // участников раздачи — ждём…») and, where a page can offer one, «Выбрать
 // другую раздачу…» — the same action as the download button's menu. Nothing
-// without a stall hint. A copy of the core's (the core player keeps
-// its own).
+// without a stall hint. The addon's own: the core has no such line to share.
 import { ui } from '@antresol/addon-sdk'
 import type { TorrentHint, TorrentStalled } from './types'
 import { useT } from './i18n'

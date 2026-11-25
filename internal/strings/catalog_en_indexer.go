@@ -24,7 +24,10 @@ func init() {
 
 		// a source paused for a failed FlareSolverr; a search that ran out of time waiting for it
 		"Сайт закрыт защитой от ботов (Cloudflare): FlareSolverr не справился. Автоматические проверки возобновятся после %s; поиск, который вы запустите сами, всё равно попробует. Проверьте FlareSolverr в разделе «Настройки → Сервер → Настройки загрузок».": "The site is behind bot protection (Cloudflare), and FlareSolverr failed. Automatic checks resume after %s; a search you start yourself still tries. Check FlareSolverr in Settings → Server → Download settings.",
-		"FlareSolverr занят другими запросами, а время поиска вышло. Повторите чуть позже.": "FlareSolverr is busy with other requests and the search ran out of time. Try again a little later.",
+		// the address guard of tracker sources
+		"Antresol заблокировал обращение источника к другому адресу в домашней сети (редирект или ссылка сайта). Источник ходит только на свой сайт: если он у вас дома, укажите его адрес в поле «Адрес сайта» в настройках источника.": "Antresol blocked the source from reaching another address on the home network (a redirect or a link from the site). A source only reaches its own site: if it is on your home network, enter its address in the “Site Address” field of the source’s settings.",
+		"Сайт просит пройти проверку браузером, но FlareSolverr не открывает адреса домашней сети. Проверьте адрес сайта в настройках источника.":                                                                                        "The site asks for a browser check, but FlareSolverr does not open home-network addresses. Check the site address in the source’s settings.",
+		"FlareSolverr занят другими запросами, а время поиска вышло. Повторите чуть позже.":                                                                                                                                              "FlareSolverr is busy with other requests and the search ran out of time. Try again a little later.",
 
 		"источник не найден":                  "torrent source not found",
 		"описание этого трекера не найдено":   "this tracker’s definition wasn’t found",
@@ -39,6 +42,7 @@ func init() {
 		"сайт закрыт защитой от ботов (Cloudflare)": "the site is behind bot protection (Cloudflare)",
 		"FlareSolverr занят другим запросом":        "FlareSolverr is busy with another request",
 		"сайт недоступен":                           "the site is unavailable",
+		"адрес сайта в домашней сети":               "the site’s address is on the home network",
 		"сайт вернул не торрент-файл":               "the site didn’t return a torrent file",
 		"сайт ответил не так, как ожидалось":        "the site responded unexpectedly",
 		"сайт вернул страницу вместо файла":         "the site returned a page instead of a file",

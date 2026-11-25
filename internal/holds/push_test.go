@@ -56,6 +56,19 @@ func one(ih, name string) []Info {
 	return []Info{{Status: torrent.Status{InfoHash: ih, Name: name, SaveDir: "/m/dl", Status: torrent.StatusSeeding}}}
 }
 
+// fakeClock is the pusher's clock, moved by the test.
+type fakeClock struct {
+	mu sync.Mutex
+	t  time.Time
+}
+
+func (c *fakeClock) get() time.Time { c.mu.Lock(); defer c.mu.Unlock(); return c.t }
+func (c *fakeClock) add(d time.Duration) {
+	c.mu.Lock()
+	c.t = c.t.Add(d)
+	c.mu.Unlock()
+}
+
 // fakeTicker hands Run a ticker the test drives.
 type fakeTicker struct {
 	c     chan time.Time
@@ -190,13 +203,14 @@ func (r *rootsFrom) set(roots []string, err error) {
 }
 
 // A root missing at start (/info leaves it out) counts once it appears:
-// /info is read again before every push.
+// /info is read again at the next full cycle (a minute) or push.
 func TestPusher_RootAppearsLater(t *testing.T) {
 	src := &fakeSource{list: one("aa", "A")}
 	rec := &recorder{put: make(chan struct{}, 10)}
 	roots := &rootsFrom{}
 	ft := newFakeTicker()
-	p := &Pusher{Src: src, Put: rec.Put, FileRoots: nil, Roots: roots.get, tick: ft.tick}
+	clk := &fakeClock{t: time.Unix(1e9, 0)}
+	p := &Pusher{Src: src, Put: rec.Put, FileRoots: nil, Roots: roots.get, tick: ft.tick, now: clk.get}
 	if err := p.PushNow(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -209,6 +223,7 @@ func TestPusher_RootAppearsLater(t *testing.T) {
 	go p.Run(ctx)
 	<-ft.every
 	roots.set([]string{"/m"}, nil)
+	clk.add(fullEvery)
 	ft.c <- time.Now()
 	<-rec.put
 	if got := rec.sets[1]; len(got) != 1 || got[0].Key != "aa" || p.LastOutside() != 0 {
@@ -419,5 +434,147 @@ func TestPusher_LateMount(t *testing.T) {
 	ft.c <- time.Now()
 	if set, _ := core.saved(); len(set) != 1 || set[0].Key != "aa" || p.LastOutside() != 0 {
 		t.Fatalf("after the mount: %+v, outside %d", set, p.LastOutside())
+	}
+}
+
+// A tick that finds the torrents as they were builds nothing and reads
+// nothing from the core (the roots), until the full cycle; a changed
+// torrent, an organize starting or Changed gets through at once.
+func TestPusher_QuietTickDoesNoWork(t *testing.T) {
+	src := &fakeSource{list: one("aa", "A")}
+	rec := &recorder{put: make(chan struct{}, 10)}
+	var mu sync.Mutex
+	var roots int
+	busy := false
+	ft := newFakeTicker()
+	clk := &fakeClock{t: time.Unix(1e9, 0)}
+	p := &Pusher{Src: src, Put: rec.Put, tick: ft.tick, now: clk.get,
+		Roots: func(context.Context) ([]string, []string, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			roots++
+			return []string{"/m"}, nil, nil
+		},
+		Busy: func(string) bool { mu.Lock(); defer mu.Unlock(); return busy }}
+	if err := p.PushNow(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	<-rec.put
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { p.Run(ctx); close(done) }()
+	<-ft.every
+	count := func() int { mu.Lock(); defer mu.Unlock(); return roots }
+	// each send returns once the previous tick is done (Run takes it)
+	for i := 0; i < 5; i++ {
+		clk.add(5 * time.Second)
+		ft.c <- time.Now()
+	}
+	ft.c <- time.Now() // the fifth tick has finished
+	if n := count(); n != 1 {
+		t.Fatalf("roots read %d times in 5 quiet ticks, want 1 (the first push)", n)
+	}
+	// an organize starting is a change of its own
+	mu.Lock()
+	busy = true
+	mu.Unlock()
+	clk.add(5 * time.Second)
+	ft.c <- time.Now()
+	<-rec.put
+	if got := rec.sets[len(rec.sets)-1]; len(got) != 1 || !got[0].Busy {
+		t.Fatalf("busy not pushed: %+v", got)
+	}
+	// after a minute the set is built and compared in full again
+	before := count()
+	clk.add(fullEvery)
+	ft.c <- time.Now()
+	ft.c <- time.Now()
+	if n := count(); n != before+1 {
+		t.Fatalf("full cycle read the roots %d times, want %d", n, before+1)
+	}
+	if n := rec.count(); n != 2 {
+		t.Fatalf("puts %d, want 2 (an unchanged set is not sent)", n)
+	}
+	cancel()
+	<-done
+}
+
+func torrentsWithFiles(n int) []torrent.Status {
+	out := make([]torrent.Status, n)
+	for i := range out {
+		out[i] = torrent.Status{InfoHash: string(rune('a' + i)), Name: "N", SaveDir: "/m/dl", Status: torrent.StatusSeeding}
+	}
+	return out
+}
+
+// A torrent's files are listed again only when its shape changed or the
+// cache is a minute old.
+func TestWithFiles_ListsOnlyChanged(t *testing.T) {
+	var loads []string
+	load := func(ih string) []torrent.FileInfo { loads = append(loads, ih); return []torrent.FileInfo{{Size: 1}} }
+	now := time.Unix(1e9, 0)
+	list := torrentsWithFiles(3)
+	out, cache := withFiles(nil, list, now, load)
+	if len(loads) != 3 || len(out) != 3 || len(out[0].Files) != 1 {
+		t.Fatalf("first pass: loads %v, out %+v", loads, out)
+	}
+	loads = nil
+	_, cache = withFiles(cache, list, now.Add(5*time.Second), load)
+	if len(loads) != 0 {
+		t.Fatalf("unchanged torrents listed again: %v", loads)
+	}
+	list[1].SelectedFiles, list[1].TotalFiles = 1, 2 // a selection changed
+	_, cache = withFiles(cache, list, now.Add(10*time.Second), load)
+	if len(loads) != 1 || loads[0] != "b" {
+		t.Fatalf("changed torrent: loads %v, want [b]", loads)
+	}
+	loads = nil
+	_, cache = withFiles(cache, list[:2], now.Add(15*time.Second), load) // one removed
+	if len(loads) != 0 || len(cache) != 2 {
+		t.Fatalf("removed torrent: loads %v, cache %d", loads, len(cache))
+	}
+	// a torrent whose files cannot be listed now (being moved) is asked again
+	nothing := func(string) []torrent.FileInfo { loads = append(loads, "x"); return nil }
+	loads = nil
+	_, cache = withFiles(nil, list[:1], now, nothing)
+	_, cache = withFiles(cache, list[:1], now.Add(time.Second), nothing)
+	if len(loads) != 2 || len(cache) != 0 {
+		t.Fatalf("an empty answer was kept: loads %v, cache %d", loads, len(cache))
+	}
+	loads = nil
+	_, cache = withFiles(nil, list[:2], now, load)
+	loads = nil
+	_, _ = withFiles(cache, list[:2], now.Add(filesRefresh+time.Second), load)
+	if len(loads) != 2 {
+		t.Fatalf("after the refresh age: loads %v, want both", loads)
+	}
+}
+
+// forgetSource is a Source that counts Forget.
+type forgetSource struct {
+	fakeSource
+	forgot int
+}
+
+func (s *forgetSource) Forget() { s.forgot++ }
+
+// A forced build (PushNow, Changed) makes the source list its files afresh;
+// a quiet tick does not.
+func TestPusher_ForcedBuildForgetsTheFiles(t *testing.T) {
+	src := &forgetSource{fakeSource: fakeSource{list: one("aa", "A")}}
+	rec := &recorder{}
+	p := &Pusher{Src: src, Put: rec.Put, FileRoots: []string{"/m"}}
+	if err := p.PushNow(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if src.forgot != 1 {
+		t.Fatalf("forgot %d times by PushNow, want 1", src.forgot)
+	}
+	if err := p.push(context.Background(), false); err != nil || src.forgot != 1 {
+		t.Fatalf("a quiet push: %v, forgot %d", err, src.forgot)
+	}
+	p.Changed()
+	if err := p.push(context.Background(), p.dirty.Swap(false)); err != nil || src.forgot != 2 {
+		t.Fatalf("a changed push: %v, forgot %d", err, src.forgot)
 	}
 }

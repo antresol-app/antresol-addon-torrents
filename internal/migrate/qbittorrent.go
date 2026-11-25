@@ -118,6 +118,12 @@ type qbImport struct {
 	index map[fileKey][]library.File // library files by inode, built on first use
 }
 
+// seedingOff: «Не раздавать» is on (KeepPaused, as boot sets it), so a move
+// ends the seeding on both sides. No rule is no answer: not claimed.
+func (im *qbImport) seedingOff(ctx context.Context) bool {
+	return im.o.KeepPaused != nil && im.o.KeepPaused(ctx)
+}
+
 func (im *qbImport) add(l Line) {
 	l.Source = SourceQBittorrent
 	if l.Kind == "" {
@@ -236,6 +242,7 @@ type layout struct {
 	dataDir string
 	files   []linkFile // in Info.UpvertedFiles order
 	renamed bool       // some file is not at its torrent path: needs a link tree
+	escapes bool       // a file's mapped path climbs out of the data folder (taken as its torrent path)
 }
 
 func layoutOf(paths PathMap, info *metainfo.Info, fr fastresume) layout {
@@ -246,6 +253,10 @@ func layoutOf(paths PathMap, info *metainfo.Info, fr fastresume) layout {
 		actual := def
 		if i < len(fr.mapped) && fr.mapped[i] != "" {
 			actual = path.Clean(fr.mapped[i])
+			if actual == ".." || strings.HasPrefix(actual, "../") {
+				l.escapes = true
+				actual = def
+			}
 			if actual != def {
 				l.renamed = true
 			}
@@ -313,6 +324,10 @@ func (im *qbImport) one(ctx context.Context, stem string) error {
 		l.Name = fr.name
 	}
 	lay := layoutOf(im.o.Paths, &info, fr)
+	if lay.escapes {
+		im.fail(l, "Путь файла в состоянии qBittorrent выходит за папку раздачи")
+		return nil
+	}
 	mark, marked, err := loadState(im.o.StateDir, ih)
 	if err != nil {
 		im.log.Warn("qbittorrent: move state", "infohash", ih, "err", err)
@@ -465,6 +480,9 @@ func (im *qbImport) one(ctx context.Context, stem string) error {
 	// 6. Dry run.
 	if im.o.DryRun {
 		l.Status = StatusPlanned
+		if im.seedingOff(ctx) {
+			l.Reason = "Включено «Не раздавать»: после переноса раздача прекратится и в qBittorrent, и в Antresol"
+		}
 		im.add(l)
 		return nil
 	}
@@ -532,7 +550,10 @@ func (im *qbImport) finish(ctx context.Context, l Line, matched []library.File, 
 	}
 	im.bind(ctx, ih, matched)
 	l.Status = StatusImported
-	if l.Prev == PrevStopped {
+	switch {
+	case im.seedingOff(ctx):
+		l.Reason = "Antresol не раздаёт её: включено «Не раздавать»"
+	case l.Prev == PrevStopped:
 		l.Reason = "В qBittorrent была на паузе — теперь раздаёт Antresol"
 	}
 	im.add(l)

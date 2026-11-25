@@ -12,13 +12,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { getEngine, getSettings, saveFlareSolverr, saveNoSeeding, saveSettings } from '../api'
 import { useT } from '../i18n'
 import { LANGS, langLabel } from '../langs'
-import { RankedList } from '../RankedList'
 import { setTitle } from '../title'
 import type { AdminSettings, EngineStatus, HelperStatus, LangCode, MusicFormat, Mp3Bitrate, Voice } from '../types'
 import m from './Manage.module.css'
 import styles from './Settings.module.css'
 
-const { Button, GroupedSection, ListRow, MultiSelect, NumberField, SegmentedControl, Select, TextField, Toggle } = ui
+const { Button, GroupedSection, ListRow, MultiSelect, NumberField, RankedList, SegmentedControl, Select, Spinner, TextField, Toggle } = ui
 
 export const SIZE_STOPS = [2, 4, 6, 8, 10, 15, 20, 30, 40, 60, 80, 0]
 
@@ -103,12 +102,12 @@ export function Settings() {
       <section>
         <h2 className={m.title}>{t('tsettings.title')}</h2>
         {error ? (
-          <div className={m.problem} role="alert" style={{ marginTop: 16 }}>
+          <div className={`${m.problem} ${m.afterTitle}`} role="alert">
             {error}
           </div>
         ) : (
           <div className={m.spinnerRow} role="status">
-            <span className={m.spinner} aria-hidden /> {t('settings.loading')}
+            <Spinner track className={m.spinner} /> {t('settings.loading')}
           </div>
         )}
       </section>

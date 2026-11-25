@@ -74,47 +74,17 @@
   color: var(--label-2);
 }
 .spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--fill-1);
-  border-top-color: var(--label);
-  border-radius: 50%;
-  animation: spin 0.9s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  --spinner-size: 14px;
+  color: var(--label);
 }
 .more {
   position: absolute;
   right: 8px;
   bottom: 6px;
 }
+/* «Изменить вход…» after the error: a ui/Button link */
 .fix {
-  display: inline-block;
   margin-left: var(--s-1h);
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--accent);
-  font: inherit;
-  cursor: pointer;
-  min-height: 28px;
-}
-.fix:hover {
-  text-decoration: underline;
-}
-/* a finger's 44 pt target (HIG): the hit area grows, the look does not */
-@media (pointer: coarse) {
-  .fix {
-    position: relative;
-  }
-  .fix::after {
-    content: '';
-    position: absolute;
-    inset: calc(-1 * var(--s-2)) 0;
-  }
 }
 
 .origin {

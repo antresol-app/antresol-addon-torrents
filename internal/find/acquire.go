@@ -10,6 +10,7 @@ import (
 
 	"github.com/antresol-app/antresol-addon-torrents/internal/acquire"
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/i18n"
+	"github.com/antresol-app/antresol-addon-torrents/internal/httpx"
 	"github.com/antresol-app/antresol/addonkit"
 )
 
@@ -22,19 +23,19 @@ const approveTimeout = 10 * time.Second
 // download, the kids' requests of it are approved.
 func (h *handlers) acquire(w http.ResponseWriter, r *http.Request) {
 	var req acquire.AcquireRequest
-	if !decode(w, r, &req) {
+	if !httpx.Decode(w, r, &req) {
 		return
 	}
 	switch req.Quality {
 	case "", "720p", "1080p", "2160p":
 		req.Resolution = req.Quality
 	default:
-		writeErr(w, r, http.StatusBadRequest, "Неизвестное качество")
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Неизвестное качество")
 		return
 	}
 	res, err := h.acquireAs(r.Context(), user(r), h.myLanguages(r), req)
 	if err != nil {
-		acquireErr(w, r, "acquire", err)
+		httpx.AcquireErr(w, r, "find", "acquire", err)
 		return
 	}
 	res.Note = i18n.Localize(r.Context(), res.Note)
@@ -101,7 +102,7 @@ func (h *handlers) titleProgress(w http.ResponseWriter, r *http.Request) {
 	}
 	kind := q.Get("kind")
 	if err1 != nil || err2 != nil || tmdbID <= 0 || season < 0 || (kind != acquire.KindMovie && kind != acquire.KindSeries) {
-		writeErr(w, r, http.StatusBadRequest, "Неизвестный фильм или сериал")
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Неизвестный фильм или сериал")
 		return
 	}
 	p, ok := h.Acquire.TitleProgress(r.Context(), kind, tmdbID, season)
@@ -139,7 +140,7 @@ const maxBatch = 100
 func (h *handlers) titlesProgress(w http.ResponseWriter, r *http.Request) {
 	ts := r.URL.Query()["t"]
 	if len(ts) == 0 || len(ts) > maxBatch {
-		writeErr(w, r, http.StatusBadRequest, "Неизвестный фильм или сериал")
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Неизвестный фильм или сериал")
 		return
 	}
 	byKey := map[acquire.TitleKey]string{}
@@ -147,7 +148,7 @@ func (h *handlers) titlesProgress(w http.ResponseWriter, r *http.Request) {
 	for _, t := range ts {
 		k, ok := parseTitleKey(t)
 		if !ok {
-			writeErr(w, r, http.StatusBadRequest, "Неизвестный фильм или сериал")
+			httpx.WriteErr(w, r, http.StatusBadRequest, "Неизвестный фильм или сериал")
 			return
 		}
 		if _, seen := byKey[k]; !seen {
@@ -192,16 +193,16 @@ func (h *handlers) cancelTitle(w http.ResponseWriter, r *http.Request) {
 		TMDBID int    `json:"tmdbId"`
 		Season int    `json:"season"`
 	}
-	if !decode(w, r, &in) {
+	if !httpx.Decode(w, r, &in) {
 		return
 	}
 	if in.TMDBID <= 0 || in.Season < 0 || (in.Kind != acquire.KindMovie && in.Kind != acquire.KindSeries) {
-		writeErr(w, r, http.StatusBadRequest, "Неизвестный фильм или сериал")
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Неизвестный фильм или сериал")
 		return
 	}
 	n, err := h.Acquire.CancelTitle(r.Context(), in.Kind, in.TMDBID, in.Season, "")
 	if err != nil {
-		acquireErr(w, r, "cancel download", err)
+		httpx.AcquireErr(w, r, "find", "cancel download", err)
 		return
 	}
 	addonkit.WriteJSON(w, http.StatusOK, map[string]int{"cancelled": n})
@@ -213,12 +214,12 @@ func (h *handlers) promote(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Force bool `json:"force"`
 	}
-	if r.ContentLength != 0 && !decode(w, r, &in) {
+	if r.ContentLength != 0 && !httpx.Decode(w, r, &in) {
 		return
 	}
 	st, err := h.Acquire.Promote(r.Context(), r.PathValue("ih"), in.Force && user(r).IsAdmin)
 	if err != nil {
-		acquireErr(w, r, "promote", err)
+		httpx.AcquireErr(w, r, "find", "promote", err)
 		return
 	}
 	if h.Added != nil {

@@ -153,7 +153,7 @@ func main() {
 		// the holds: pushed before ready (and before the admin routes
 		// serve), then kept current; the files.* hooks answer for them
 		pusher := &holds.Pusher{
-			Src: holds.EngineSource{Engine: svc.Engine}, Busy: svc.Acq.Organizing,
+			Src: &holds.EngineSource{Engine: svc.Engine}, Busy: svc.Acq.Organizing,
 			Put: core.PutHolds, FileRoots: info.FileRoots, MissingRoots: info.MissingRoots,
 			// roots come and go on disk (a late mount): read again before
 			// each push; holds under a missing root stay in the set

@@ -10,6 +10,7 @@ import (
 	"github.com/antresol-app/antresol-addon-torrents/internal/acquire"
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/i18n"
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/metadata/tmdb"
+	"github.com/antresol-app/antresol-addon-torrents/internal/httpx"
 	"github.com/antresol-app/antresol-addon-torrents/internal/indexer"
 	"github.com/antresol-app/antresol/addonkit"
 )
@@ -27,7 +28,7 @@ func (h *handlers) discover(w http.ResponseWriter, r *http.Request) {
 		cs, err = h.Acquire.Discover(ctx, q.Get("q"))
 	}
 	if err != nil {
-		acquireErr(w, r, "discover", err)
+		httpx.AcquireErr(w, r, "find", "discover", err)
 		return
 	}
 	if cs == nil {
@@ -60,7 +61,7 @@ func (h *handlers) releases(w http.ResponseWriter, r *http.Request) {
 	if q.Get("stream") != "1" {
 		resp, err := h.Acquire.Releases(r.Context(), req, nil)
 		if err != nil {
-			acquireErr(w, r, "releases", err)
+			httpx.AcquireErr(w, r, "find", "releases", err)
 			return
 		}
 		addonkit.WriteJSON(w, http.StatusOK, mineResponse(resp, mine))
@@ -88,7 +89,7 @@ func (h *handlers) releases(w http.ResponseWriter, r *http.Request) {
 	})
 	switch {
 	case err != nil && !started:
-		acquireErr(w, r, "releases", err)
+		httpx.AcquireErr(w, r, "find", "releases", err)
 	case err != nil:
 		// the sources were asked already: only an ended context fails now
 		if r.Context().Err() == nil {

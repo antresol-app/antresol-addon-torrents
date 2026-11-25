@@ -72,6 +72,7 @@ func init() {
 		"Прямая загрузка — только для книг и комиксов":                    "Direct download is only for books and comics",
 		"Диск заполнен":                                                   "The disk is full",
 		"Сервер останавливается":                                          "The server is shutting down",
+		"Слишком много загрузок в очереди — подождите":                    "Too many downloads are queued — wait for some to finish",
 		"Загрузка прервана: сервер останавливается":                       "Download interrupted: the server is shutting down",
 		"Загрузка отменена":                                               "Download canceled",
 		"Загрузка не найдена":                                             "Download not found",

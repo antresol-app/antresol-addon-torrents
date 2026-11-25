@@ -66,6 +66,10 @@ const (
 // restarts); an admin can retry by hand after fixing the cause.
 const maxOrganizeAttempts = 3
 
+// maxOrganizeAtOnce organize jobs run at once; the rest wait (a restart
+// with many finished downloads must not copy and probe them all together).
+const maxOrganizeAtOnce = 2
+
 // Engine is the part of *torrent.Engine the service uses.
 type Engine interface {
 	CacheEngine
@@ -212,6 +216,11 @@ type Service struct {
 	removing map[string]bool
 	// lastAdult: the last EventLibraryProgress sent (JSON; publishProgress)
 	lastAdult string
+	prog      progressState
+	orgSlots  chan struct{} // maxOrganizeAtOnce slots of organize jobs
+	// names: the core's profile names by uid, read at most every namesTTL
+	names   map[string]string
+	namesAt time.Time
 	// forced: downloads the admin started or resumed on a full disk; the
 	// disk guard does not hold them again (until a restart).
 	forced map[string]bool
@@ -470,7 +479,8 @@ func wrapErr(kind error, msg string, err error) error {
 
 // New creates the service and subscribes it to torrent completion.
 func New(o Options) *Service {
-	s := &Service{o: o, log: o.Log, organizing: map[string]bool{}, removing: map[string]bool{}, forced: map[string]bool{}, closing: make(chan struct{})}
+	s := &Service{o: o, log: o.Log, organizing: map[string]bool{}, removing: map[string]bool{}, forced: map[string]bool{}, closing: make(chan struct{}),
+		orgSlots: make(chan struct{}, maxOrganizeAtOnce)}
 	s.root, s.rootStop = context.WithCancel(context.Background())
 	s.cacheBytes.Store(o.StreamCacheBytes)
 	if s.log == nil {
@@ -1725,18 +1735,27 @@ func (s *Service) StreamFiles(ih string) []torrent.FileInfo {
 // --- torrents (admin) ---
 
 // Torrents lists all torrents with their library state.
-func (s *Service) Torrents() []TorrentView {
-	list := s.o.Engine.List()
+func (s *Service) Torrents() []TorrentView { return s.torrentViews(s.o.Engine.List()) }
+
+// torrentViews is Torrents for the engine's list.
+func (s *Service) torrentViews(list []torrent.Status) []TorrentView {
 	acqs, err := s.acquisitions(context.Background())
 	if err != nil {
 		s.log.Warn("load acquisitions", "err", err)
 	}
-	names := s.userNames(context.Background())
+	// the core is asked for the names only when a download has an owner
+	var names map[string]string
+	nameOf := func(uid string) string {
+		if names == nil {
+			names = s.userNames(context.Background())
+		}
+		return names[uid]
+	}
 	out := make([]TorrentView, 0, len(list))
 	for _, st := range list {
 		v := TorrentView{Status: st}
 		if st.AddedByUID != "" {
-			v.AddedByName = names[st.AddedByUID]
+			v.AddedByName = nameOf(st.AddedByUID)
 		}
 		if a, ok := acqs[st.InfoHash]; ok {
 			v.Kind, v.Title, v.Poster = a.Kind, a.Title, a.Poster
@@ -1761,7 +1780,7 @@ func (s *Service) Torrents() []TorrentView {
 		}
 		out = append(out, v)
 	}
-	out = append(out, s.directViews(names)...)
+	out = append(out, s.directViews(nameOf)...)
 	sort.SliceStable(out, func(i, j int) bool { return out[i].AddedAt.Before(out[j].AddedAt) })
 	return out
 }
@@ -1994,13 +2013,29 @@ func LocalizeTorrents(ctx context.Context, vs []TorrentView) []TorrentView {
 	return vs
 }
 
-// userNames maps profile uids to names (for «Добавил: …»).
+// namesTTL: how long userNames serves the profiles it read.
+const namesTTL = time.Minute
+
+// userNames maps profile uids to names (for «Добавил: …»); read from the
+// core at most every namesTTL (a core that did not answer is asked again).
 func (s *Service) userNames(ctx context.Context) map[string]string {
+	s.mu.Lock()
+	if s.names != nil && time.Since(s.namesAt) < namesTTL {
+		defer s.mu.Unlock()
+		return s.names
+	}
+	s.mu.Unlock()
 	out := map[string]string{}
-	for _, u := range s.profiles(ctx) {
+	us := s.profiles(ctx)
+	for _, u := range us {
 		if u.UID != "" {
 			out[u.UID] = u.Name
 		}
+	}
+	if len(us) > 0 {
+		s.mu.Lock()
+		s.names, s.namesAt = out, time.Now()
+		s.mu.Unlock()
 	}
 	return out
 }
@@ -2262,6 +2297,13 @@ func (s *Service) startOrganizeJob(ih string, manual, force bool) {
 			delete(s.organizing, ih)
 			s.mu.Unlock()
 		}()
+		// the marker above stays while it waits for a slot
+		select {
+		case s.orgSlots <- struct{}{}:
+			defer func() { <-s.orgSlots }()
+		case <-s.root.Done():
+			return
+		}
 		s.organize(s.root, ih, manual, force)
 	}()
 }

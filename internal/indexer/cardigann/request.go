@@ -2,6 +2,7 @@ package cardigann
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/htmlindex"
 	"golang.org/x/text/encoding/unicode"
@@ -22,9 +24,17 @@ const (
 	defaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 )
 
-// maxBody limits a response body; larger responses are an error (a variable
-// for tests).
-var maxBody int64 = 32 << 20
+// maxBody limits the body of a .torrent file, maxPageBody that of every
+// page the runner parses (HTML, JSON, XML: it is copied to a string and
+// built into a tree of about ten times its size): larger responses are an
+// error (variables for tests). A real page above 8 MiB is a broken tracker.
+var (
+	maxBody     int64 = 32 << 20
+	maxPageBody int64 = 8 << 20
+)
+
+// maxRows is the most result rows taken from one page of an indexer.
+const maxRows = 1000
 
 // lookupEncoding resolves a definition charset; nil means UTF-8.
 func lookupEncoding(name string) (encoding.Encoding, error) {
@@ -102,6 +112,8 @@ type request struct {
 	headers     map[string]string
 	referer     string
 	follow      bool
+	// limit is the largest body accepted (0: maxPageBody)
+	limit int64
 }
 
 type response struct {
@@ -111,13 +123,33 @@ type response struct {
 	url      *url.URL // final URL
 	location string   // redirect target when the redirect was not followed
 	solved   bool     // body came from FlareSolverr and is already text
+
+	// text and doc are what the body decoded and parsed as HTML come to,
+	// made once (a search page is looked at by the sign-in check, the error
+	// check and the row parser)
+	str    *string
+	htmlOf *goquery.Document
+	htmlEr error
 }
 
 func (r *Runner) text(resp *response) string {
-	if resp.solved {
-		return string(resp.body)
+	if resp.str == nil {
+		s := string(resp.body)
+		if !resp.solved {
+			s = decodeBytes(r.enc, resp.body)
+		}
+		resp.str = &s
 	}
-	return decodeBytes(r.enc, resp.body)
+	return *resp.str
+}
+
+// htmlDoc is the body as an HTML tree, built once. Whoever changes it
+// (the row parser merges rows) comes last.
+func (r *Runner) htmlDoc(resp *response) (*goquery.Document, error) {
+	if resp.htmlOf == nil && resp.htmlEr == nil {
+		resp.htmlOf, resp.htmlEr = goquery.NewDocumentFromReader(strings.NewReader(r.text(resp)))
+	}
+	return resp.htmlOf, resp.htmlEr
 }
 
 func (resp *response) isRedirect() bool { return resp.status >= 300 && resp.status < 400 }
@@ -137,12 +169,13 @@ func (r *Runner) do(ctx context.Context, req *request) (*response, error) {
 		return nil, fmt.Errorf("cardigann: %s: %w", r.Def.ID, netError(err))
 	}
 	defer hresp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(hresp.Body, maxBody+1))
+	limit := cmp.Or(req.limit, maxPageBody)
+	data, err := io.ReadAll(io.LimitReader(hresp.Body, limit+1))
 	if err != nil {
 		return nil, fmt.Errorf("cardigann: %s: read response: %w", r.Def.ID, err)
 	}
-	if int64(len(data)) > maxBody {
-		return nil, fmt.Errorf("%w: %s прислал слишком большой ответ (больше %d МБ)", ErrBadResponse, r.Def.Name, maxBody>>20)
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("%w: %s прислал слишком большой ответ (больше %d МБ)", ErrBadResponse, r.Def.Name, limit>>20)
 	}
 	resp := &response{status: hresp.StatusCode, header: hresp.Header, body: data, url: hresp.Request.URL}
 	if resp.isRedirect() {
@@ -166,7 +199,9 @@ func (r *Runner) do(ctx context.Context, req *request) (*response, error) {
 // httpRequest builds the HTTP request of req (the runner's user agent,
 // browser-like headers, the form) and a client that follows redirects only
 // when req.follow (at most 10, http and https only; Strict: at most 5 and
-// never from https to http).
+// never from https to http). A request with headers or a form never goes from
+// https to http, and its headers and form do not follow a redirect to another
+// site.
 func (r *Runner) httpRequest(ctx context.Context, req *request) (*http.Request, *http.Client, error) {
 	var body io.Reader
 	contentType := req.contentType
@@ -200,6 +235,9 @@ func (r *Runner) httpRequest(ctx context.Context, req *request) (*http.Request, 
 	if r.Strict {
 		limit = 5
 	}
+	// what the request carries that belongs to the site only: the
+	// definition's headers (API keys) and a posted form (a login)
+	secret := len(req.headers) > 0 || req.method == http.MethodPost
 	client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
 		if !follow || (next.URL.Scheme != "http" && next.URL.Scheme != "https") {
 			return http.ErrUseLastResponse
@@ -207,8 +245,19 @@ func (r *Runner) httpRequest(ctx context.Context, req *request) (*http.Request, 
 		if len(via) >= limit {
 			return errors.New("too many redirects")
 		}
-		if r.Strict && via[len(via)-1].URL.Scheme == "https" && next.URL.Scheme != "https" {
+		if (r.Strict || secret) && via[len(via)-1].URL.Scheme == "https" && next.URL.Scheme != "https" {
 			return fmt.Errorf("%w: redirect from https to http", ErrBadResponse)
+		}
+		if secret && !sameSite(r.base, next.URL) {
+			// Go drops only Authorization and cookies on a hop to another
+			// host, and replays a form on 307/308: the site's own headers
+			// and password stay on the site
+			if next.Method != http.MethodGet && next.Method != http.MethodHead {
+				return fmt.Errorf("%w: redirect of a form to another site", ErrBadResponse)
+			}
+			for k := range req.headers {
+				next.Header.Del(k)
+			}
 		}
 		return nil
 	}
@@ -322,6 +371,9 @@ func (r *Runner) solve(ctx context.Context, req *request) (*response, error) {
 	if err != nil {
 		return nil, err
 	}
+	if !r.solverMayFetch(ctx, target.Hostname()) {
+		return nil, fmt.Errorf("%w: %s: not solved through FlareSolverr", ErrLocalAddress, r.Def.Name)
+	}
 	if err := r.SolverGate.acquire(ctx); err != nil {
 		// still waiting for its turn when the asker's time ran out
 		return nil, fmt.Errorf("%w: %w: %w", ErrCloudflare, ErrSolverBusy, err)
@@ -402,6 +454,9 @@ func (r *Runner) callSolver(ctx context.Context, buf []byte, target *url.URL) (*
 	if u, err := url.Parse(sol.URL); err == nil && u.Host != "" {
 		final = u
 	}
+	if final.Hostname() != target.Hostname() && !r.solverMayFetch(ctx, final.Hostname()) {
+		return nil, fmt.Errorf("%w: %s: FlareSolverr ended on a local network address", ErrLocalAddress, r.Def.Name)
+	}
 	if r.client.Jar != nil && len(sol.Cookies) > 0 {
 		var cs []*http.Cookie
 		for _, c := range sol.Cookies {
@@ -426,6 +481,11 @@ func (r *Runner) callSolver(ctx context.Context, buf []byte, target *url.URL) (*
 		status = http.StatusOK
 	}
 	return &response{status: status, header: http.Header{"Content-Type": {"text/html; charset=utf-8"}}, body: []byte(sol.Response), url: final, solved: true}, nil
+}
+
+// solverMayFetch: SolverHostOK, or yes when it is not set.
+func (r *Runner) solverMayFetch(ctx context.Context, host string) bool {
+	return r.SolverHostOK == nil || r.SolverHostOK(ctx, host)
 }
 
 // resolve resolves a (possibly relative) link against base.

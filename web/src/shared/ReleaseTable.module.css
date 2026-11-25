@@ -70,35 +70,6 @@
   font: var(--t-footnote);
   color: var(--label-2);
 }
-.tag,
-.lang {
-  /* the core's ui badge (Badge.module.css .badge), inlined: an addon's
-     stylesheet cannot compose the core's */
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  height: 20px;
-  padding: 0 7px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-sm);
-  background: var(--fill-4);
-  color: var(--label-2);
-  font: 600 11px / 18px var(--font-text);
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-}
-/* .strong: the fact that matters most in a row (a release's language) */
-.lang {
-  border-color: transparent;
-  background: var(--fill-2);
-  color: var(--label);
-}
-/* .warning: a fact that does not match what was asked for (after .lang) */
-.mismatch {
-  border-color: var(--warning);
-  background: none;
-  color: var(--warning);
-}
 .otherFormat .title {
   color: var(--label-2);
 }
@@ -131,7 +102,7 @@
   border-bottom: 1px solid var(--separator);
 }
 .best .title {
-  font-weight: 600;
+  font-weight: var(--w-semibold);
 }
 .rejected .title {
   color: var(--label-2);
@@ -169,18 +140,11 @@
   font: var(--t-subhead);
   text-align: center;
 }
+/* ui/Spinner's ring, bigger and thicker */
 .spinner {
-  width: 26px;
-  height: 26px;
-  border: 2.5px solid var(--fill-1);
-  border-top-color: var(--label);
-  border-radius: 50%;
-  animation: spin 0.9s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  --spinner-size: 26px;
+  --spinner-width: 2.5px;
+  color: var(--label);
 }
 /* sources still searched while the list fills in */
 .pending {
@@ -192,19 +156,7 @@
   color: var(--label-2);
 }
 .miniSpinner {
-  flex: none;
-  width: 12px;
-  height: 12px;
-  border: 2px solid var(--fill-1);
-  border-top-color: var(--label-2);
-  border-radius: 50%;
-  animation: spin 0.9s linear infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .spinner,
-  .miniSpinner {
-    animation-duration: 2.4s;
-  }
+  --spinner-size: 12px;
 }
 /* the header and every row are subgrids of one grid: the size, seeders and
    action columns are as wide as their widest cell in all rows, so the

@@ -86,8 +86,8 @@ func TestBoot_ForcedBeforeEngine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.built != 1 || r.stateAtNew != "on forced\n" || !r.cfg.NoSeeding {
-		t.Fatalf("engine built %d times, state then %q, NoSeeding %v", r.built, r.stateAtNew, r.cfg.NoSeeding)
+	if r.built != 1 || r.stateAtNew != "on forced\n" || !r.cfg.NoSeeding || !r.cfg.NoUpload {
+		t.Fatalf("engine built %d times, state then %q, NoSeeding %v, NoUpload %v", r.built, r.stateAtNew, r.cfg.NoSeeding, r.cfg.NoUpload)
 	}
 	if b.Engine == nil || b.NoSeed == nil || b.DB == nil {
 		t.Fatalf("Booted = %+v", b)
@@ -125,8 +125,9 @@ func TestBoot_SettingOn(t *testing.T) {
 	if _, err := r.boot(); err != nil {
 		t.Fatal(err)
 	}
-	if r.stateAtNew != "on\n" || !r.cfg.NoSeeding {
-		t.Fatalf("state %q, NoSeeding %v", r.stateAtNew, r.cfg.NoSeeding)
+	// a setting can be turned off again: only a forced value shuts the client
+	if r.stateAtNew != "on\n" || !r.cfg.NoSeeding || r.cfg.NoUpload {
+		t.Fatalf("state %q, NoSeeding %v, NoUpload %v", r.stateAtNew, r.cfg.NoSeeding, r.cfg.NoUpload)
 	}
 }
 

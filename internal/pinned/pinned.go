@@ -157,34 +157,59 @@ func magnetIH(magnet string) (string, error) {
 
 func isMagnet(s string) bool { return strings.HasPrefix(strings.ToLower(s), "magnet:") }
 
+// maxMagnetFetches magnet metadata fetches run at once; any adult profile
+// can start one, so the number of distinct ones in the swarm is capped.
+const maxMagnetFetches = 3
+
+var magnetSlots = make(chan struct{}, maxMagnetFetches)
+
 // fromMagnet fetches a magnet's metafile from the swarm; a torrent the
-// engine has already is read from the engine (no metafile then).
+// engine has already is read from the engine (no metafile then, and no
+// place in the line for the swarm).
 func (s *Service) fromMagnet(ctx context.Context, magnet string) (got, error) {
+	if g, ok := s.known(magnet); ok {
+		return g, nil
+	}
+	// each fetch joins the swarm for up to fetchTimeout: only a few at once
+	select {
+	case magnetSlots <- struct{}{}:
+		defer func() { <-magnetSlots }()
+	case <-ctx.Done():
+		return got{}, ctx.Err()
+	}
 	fctx, cancel := context.WithTimeout(ctx, fetchTimeout)
 	defer cancel()
 	mf, err := s.Engine.FetchInfo(fctx, magnet)
 	if errors.Is(err, torrent.ErrKnown) {
-		ih, perr := magnetIH(magnet)
-		if perr != nil {
-			return got{}, perr
+		if g, ok := s.known(magnet); ok {
+			return g, nil
 		}
-		h, ok := s.Engine.Get(ih)
-		if !ok || h == nil {
-			return got{}, err
-		}
-		g := got{ih: ih}
-		for _, f := range h.Files() {
-			g.files = append(g.files, torrent.FileEntry{Index: f.Index, Path: f.Path, Size: f.Size})
-			if g.name == "" {
-				g.name, _, _ = strings.Cut(f.Path, "/")
-			}
-		}
-		return g, nil
+		return got{}, err
 	}
 	if err != nil {
 		return got{}, err
 	}
 	return parseMetafile(mf)
+}
+
+// known reads the magnet's torrent from the engine when it has it.
+func (s *Service) known(magnet string) (got, bool) {
+	ih, err := magnetIH(magnet)
+	if err != nil {
+		return got{}, false
+	}
+	h, ok := s.Engine.Get(ih)
+	if !ok || h == nil {
+		return got{}, false
+	}
+	g := got{ih: ih}
+	for _, f := range h.Files() {
+		g.files = append(g.files, torrent.FileEntry{Index: f.Index, Path: f.Path, Size: f.Size})
+		if g.name == "" {
+			g.name, _, _ = strings.Cut(f.Path, "/")
+		}
+	}
+	return g, true
 }
 
 // fetch reads the release behind a source's link (or a magnet).

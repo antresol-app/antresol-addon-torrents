@@ -264,12 +264,6 @@ func flareSolverrTags(ctx context.Context, pdb *sql.DB) (map[int]bool, error) {
 	return out, rows.Err()
 }
 
-// snapshotDB copies the database and its -wal to dst (see
-// sqlitesnap.CopyTo).
-func snapshotDB(src, dst string) error { return sqlitesnap.CopyTo(src, dst) }
-
-func stampOf(p string) sqlitesnap.Stamp { return sqlitesnap.StampOf(p) }
-
 // Prowlarr's own C# indexers that have a Cardigann counterpart here.
 var nativeIndexers = map[string]string{
 	"rutracker": "rutracker",
@@ -307,14 +301,10 @@ func (m *Manager) ImportProwlarrIn(ctx context.Context, prowlarrDBPath, tmpDir s
 	return m.prowlarr(ctx, prowlarrDBPath, tmpDir, false)
 }
 
-// PreviewProwlarr is what ImportProwlarr would do, writing nothing: no
+// PreviewProwlarrIn is what ImportProwlarrIn would do, writing nothing: no
 // source is added and custom definitions are read in memory, not copied.
-// Indexers that would be added have Reason ReasonWillAdd.
-func (m *Manager) PreviewProwlarr(ctx context.Context, prowlarrDBPath string) ([]Imported, error) {
-	return m.prowlarr(ctx, prowlarrDBPath, "", true)
-}
-
-// PreviewProwlarrIn is PreviewProwlarr with the snapshot under tmpDir.
+// Indexers that would be added have Reason ReasonWillAdd. The database
+// snapshot is taken under tmpDir.
 func (m *Manager) PreviewProwlarrIn(ctx context.Context, prowlarrDBPath, tmpDir string) ([]Imported, error) {
 	return m.prowlarr(ctx, prowlarrDBPath, tmpDir, true)
 }
@@ -610,7 +600,7 @@ func (m *Manager) prowlarrDefinition(dir, name string, dry bool, cache map[strin
 			d, err = cardigann.Parse(data)
 		}
 		if err == nil {
-			if e, ok := loadEmbedded()[d.ID]; ok {
+			if e, ok := embeddedDef(d.ID); ok {
 				d = e.def
 			} else if !dry {
 				if _, err = m.cat.SaveUserDefinition(data); err == nil {
@@ -645,7 +635,7 @@ func (m *Manager) copyCustomDefinitions(dir string) {
 			d, err = cardigann.Parse(data)
 		}
 		if err == nil {
-			if _, shipped := loadEmbedded()[d.ID]; shipped {
+			if _, shipped := embeddedFiles()[d.ID]; shipped {
 				continue
 			}
 			_, err = m.cat.SaveUserDefinition(data)

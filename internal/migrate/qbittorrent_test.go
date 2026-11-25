@@ -93,6 +93,28 @@ func TestQBImportMappedFiles(t *testing.T) {
 	}
 }
 
+// A mapped file path that climbs out of the torrent's folder is refused: the
+// torrent stays in qBittorrent, nothing is linked.
+func TestQBImportMappedPathClimbingOutRefused(t *testing.T) {
+	e := newEnv(t)
+	outside := filepath.Join(filepath.Dir(e.save), "outside.mkv")
+	if err := os.WriteFile(outside, randBytes(100<<10), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e.addTorrent(map[string][]byte{"Show/ep1.mkv": randBytes(100 << 10)},
+		map[string]any{"mapped_files": []string{"../../outside.mkv"}})
+	l := onlyLine(t, e.run(e.opts()))
+	if l.Status != StatusFailed || l.Reason != "Путь файла в состоянии qBittorrent выходит за папку раздачи" {
+		t.Fatalf("line %+v", l)
+	}
+	if len(e.eng.List()) != 0 || len(e.qb.posts()) != 0 {
+		t.Fatal("something was done")
+	}
+	if _, err := os.Stat(e.link); !os.IsNotExist(err) {
+		t.Fatal("a link tree was made")
+	}
+}
+
 func TestQBImportCyrillicName(t *testing.T) {
 	e := newEnv(t)
 	name := "День выборов WEB-DL (1080p).mkv"
@@ -491,6 +513,25 @@ func TestQBImportPausedInQB(t *testing.T) {
 	}
 	if st := status(t, e, ih); st.Status != torrent.StatusSeeding {
 		t.Fatalf("status %+v", st)
+	}
+}
+
+// With «Не раздавать» on, a move ends the seeding on both sides, and the
+// plan and the report say so (not «теперь раздаёт Antresol»).
+func TestQBImportNoSeedingSaysSo(t *testing.T) {
+	const plan = "Включено «Не раздавать»: после переноса раздача прекратится и в qBittorrent, и в Antresol"
+	e := newEnv(t)
+	ih, _ := e.addTorrent(map[string][]byte{"Show/ep1.mkv": randBytes(100 << 10)}, map[string]any{"paused": 1})
+	e.qb.setState(ih, "stoppedUP")
+	o := e.opts()
+	o.KeepPaused = func(context.Context) bool { return true } // boot: «Не раздавать» is on
+	o.DryRun = true
+	if l := onlyLine(t, e.run(o)); l.Status != StatusPlanned || l.Reason != plan {
+		t.Fatalf("plan line %+v", l)
+	}
+	o.DryRun = false
+	if l := onlyLine(t, e.run(o)); l.Status != StatusImported || l.Reason != "Antresol не раздаёт её: включено «Не раздавать»" {
+		t.Fatalf("run line %+v", l)
 	}
 }
 

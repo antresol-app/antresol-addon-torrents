@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/antresol-app/antresol-addon-torrents/internal/httpx"
 	"github.com/antresol-app/antresol-addon-torrents/internal/torrent"
 )
 
@@ -42,7 +43,7 @@ func Media(d Deps) http.Handler {
 		}
 		n, err := strconv.Atoi(r.PathValue("n"))
 		if err != nil || n < 0 {
-			writeErr(w, r, http.StatusNotFound, "Файл не найден")
+			httpx.WriteErr(w, r, http.StatusNotFound, "Файл не найден")
 			return
 		}
 		video, _, release, err := d.Acquire.OpenStream(r.Context(), ih, idx)
@@ -52,7 +53,7 @@ func Media(d Deps) http.Handler {
 		}
 		release()
 		if !isSidecar(video, d.Acquire.StreamFiles(ih), n) {
-			writeErr(w, r, http.StatusNotFound, "Файл не найден")
+			httpx.WriteErr(w, r, http.StatusNotFound, "Файл не найден")
 			return
 		}
 		serve(w, r, d.Acquire, ih, n)

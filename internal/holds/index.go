@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/i18n"
 	"github.com/antresol-app/antresol-addon-torrents/internal/torrent"
@@ -24,20 +26,87 @@ type Info struct {
 // data was rebuilt from).
 type Source interface{ Torrents() []Info }
 
-// EngineSource is the engine as a Source.
-type EngineSource struct{ Engine *torrent.Engine }
+// EngineSource is the engine as a Source. A torrent's files are read again
+// only when its shape changed (a selection, a move, a state change) or
+// every filesRefresh: listing them costs a FileInfo per file.
+type EngineSource struct {
+	Engine *torrent.Engine
+
+	mu    sync.Mutex
+	cache map[string]cachedFiles
+}
+
+// filesRefresh bounds how long a torrent's files are served from the cache
+// whatever its shape says.
+const filesRefresh = time.Minute
+
+type cachedFiles struct {
+	shape shape
+	at    time.Time
+	files []torrent.FileInfo
+}
 
 // Torrents lists every torrent with its files, oldest first.
-func (s EngineSource) Torrents() []Info {
+func (s *EngineSource) Torrents() []Info {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	var out []Info
-	for _, st := range s.Engine.List() {
-		in := Info{Status: st}
-		if h, ok := s.Engine.Get(st.InfoHash); ok {
-			in.Files = h.Files()
+	out, s.cache = withFiles(s.cache, s.Engine.List(), time.Now(), func(ih string) []torrent.FileInfo {
+		if h, ok := s.Engine.Get(ih); ok {
+			return h.Files()
 		}
-		out = append(out, in)
-	}
+		return nil
+	})
 	return out
+}
+
+// Forget drops the cached files: the next Torrents lists every torrent's
+// files afresh (a forced push builds from what is on the engine now).
+func (s *EngineSource) Forget() {
+	s.mu.Lock()
+	s.cache = nil
+	s.mu.Unlock()
+}
+
+// withFiles pairs each torrent of list with its files: those of cache when
+// its shape is the same and they are younger than filesRefresh, else
+// load(infohash). It returns the pairs and the cache for the next call; an
+// empty answer is not kept (a torrent being moved lists no files: asked
+// again at the next call).
+func withFiles(cache map[string]cachedFiles, list []torrent.Status, now time.Time, load func(ih string) []torrent.FileInfo) ([]Info, map[string]cachedFiles) {
+	out := make([]Info, 0, len(list))
+	next := make(map[string]cachedFiles, len(list))
+	for _, st := range list {
+		c, ok := cache[st.InfoHash]
+		if sh := shapeOf(st); !ok || c.shape != sh || now.Sub(c.at) >= filesRefresh {
+			c = cachedFiles{shape: sh, at: now, files: load(st.InfoHash)}
+		}
+		if c.files != nil {
+			next[st.InfoHash] = c
+		}
+		out = append(out, Info{Status: st, Files: c.files})
+	}
+	return out, next
+}
+
+// shape is what a torrent's holds are made of besides its files: when it
+// stays the same, so do they (and a change of the files that leaves it the
+// same is picked up at the next full cycle). Busy is set by the pusher.
+type shape struct {
+	Hash, Name, SaveDir, Mode, Status string
+	Parked, Busy                      bool
+	Item                              int64 // -1: none
+	Selected, Total                   int
+	Size                              int64
+}
+
+func shapeOf(st torrent.Status) shape {
+	sh := shape{Hash: st.InfoHash, Name: st.Name, SaveDir: st.SaveDir, Mode: st.Mode, Status: st.Status,
+		Parked: st.Parked, Item: -1, Selected: st.SelectedFiles, Total: st.TotalFiles, Size: st.Size}
+	if st.ItemID != nil {
+		sh.Item = *st.ItemID
+	}
+	return sh
 }
 
 // Build makes the holds of list: one per torrent with metadata, keyed by

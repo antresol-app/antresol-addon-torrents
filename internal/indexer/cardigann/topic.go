@@ -43,11 +43,7 @@ func (r *Runner) TopicText(ctx context.Context, link string) (string, error) {
 
 // sameSite: u's host is base's or a subdomain of it.
 func sameSite(base, u *url.URL) bool {
-	if base == nil {
-		return false
-	}
-	b, h := strings.ToLower(base.Hostname()), strings.ToLower(u.Hostname())
-	return h != "" && (h == b || !isIP(b) && strings.HasSuffix(h, "."+b))
+	return base != nil && HostOnSite([]string{base.Hostname()}, u.Hostname(), true)
 }
 
 // topicText is the text of a release page's first post, line by line.

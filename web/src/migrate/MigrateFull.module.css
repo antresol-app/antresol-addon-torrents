@@ -13,8 +13,8 @@
 .switchIcon {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: var(--control-h-md);
+  height: var(--control-h-md);
   border-radius: var(--r-control);
   background: var(--indigo);
   color: var(--white);
@@ -43,21 +43,9 @@
   font: var(--t-footnote);
   color: var(--destructive);
 }
+/* «Остановлены ли Sonarr и Radarr» (a ui/Checkbox) */
 .confirmCheck {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2h);
   margin-top: var(--s-3h);
-  min-height: var(--control-h-md);
-  font: var(--t-group);
-  color: var(--label);
-  cursor: pointer;
-  text-align: left;
-}
-.confirmCheck input {
-  width: 20px;
-  height: 20px;
-  accent-color: var(--accent);
 }
 
 @media (max-width: 699px) {

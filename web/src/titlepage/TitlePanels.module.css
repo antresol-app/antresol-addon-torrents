@@ -51,7 +51,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--s-2);
-  height: 52px;
+  height: var(--control-h-lg);
   padding: 0 var(--s-6);
   border-radius: var(--r-pill);
   font: var(--t-control);

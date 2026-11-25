@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"reflect"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -16,13 +17,21 @@ import (
 	"github.com/antresol-app/antresol/addonkit"
 )
 
-const pushEvery = 5 * time.Second
+const (
+	pushEvery = 5 * time.Second
+	// fullEvery: a tick whose torrents look as at the last build does no
+	// work; this often the set is built and compared anyway (the file
+	// browser's roots read again, a change the shapes do not show found).
+	fullEvery = time.Minute
+)
 
 // Pusher keeps the core's copy of the holds (PUT /files/holds) current:
 // PushNow at start (ready waits on it), then at most one push every
 // Debounce, when Changed was called or the built set differs from the last
 // one pushed (the engine has no change hook: a new download, a finished
-// one, a parked one, an organize starting all show up within Debounce).
+// one, a parked one, an organize starting all show up within Debounce, as
+// a change of the torrents' shapes). A tick that sees no change builds
+// nothing; the set is built and compared in full every fullEvery.
 type Pusher struct {
 	Src  Source
 	Busy func(ih string) bool // being put into the library (acquire.Organizing)
@@ -60,7 +69,11 @@ type Pusher struct {
 	told    bool
 	toldN   int
 
+	sig   []shape   // the torrents as of the last build
+	sigAt time.Time // that build (zero: none yet)
+
 	tick func(d time.Duration) (<-chan time.Time, func()) // tests
+	now  func() time.Time                                 // tests; time.Now
 }
 
 // PushNow builds and pushes the whole set now.
@@ -115,6 +128,18 @@ func (p *Pusher) log() *slog.Logger {
 func (p *Pusher) push(ctx context.Context, force bool) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	now := time.Now
+	if p.now != nil {
+		now = p.now
+	}
+	if f, ok := p.Src.(interface{ Forget() }); ok && force {
+		f.Forget() // a forced build lists the files afresh
+	}
+	list := p.Src.Torrents()
+	sig := p.shapes(list)
+	if !force && !p.sigAt.IsZero() && now().Sub(p.sigAt) < fullEvery && slices.Equal(sig, p.sig) {
+		return nil
+	}
 	if p.Roots != nil {
 		roots, missing, err := p.Roots(ctx)
 		if err != nil {
@@ -135,7 +160,6 @@ func (p *Pusher) push(ctx context.Context, force bool) error {
 		}
 		p.seeded, p.coreSet = true, len(saved) > 0
 	}
-	list := p.Src.Torrents()
 	h, n := p.build(list)
 	p.setOutside(n)
 	// a set that shrinks to nothing while downloads exist (a root gone
@@ -155,6 +179,7 @@ func (p *Pusher) push(ctx context.Context, force bool) error {
 			return errShrunk
 		}
 	}
+	p.sig, p.sigAt = sig, now()
 	unchanged := p.pushed && reflect.DeepEqual(h, p.last)
 	refusedAgain := p.refused != nil && reflect.DeepEqual(h, p.refused)
 	if !force && (unchanged || refusedAgain) {
@@ -166,8 +191,11 @@ func (p *Pusher) push(ctx context.Context, force bool) error {
 			// the whole set goes again on the next change
 			p.refused = h
 			p.log().Error("torrents: the core refused the holds (sent again on the next change)", "holds", len(h), "err", err)
-		} else if ctx.Err() == nil {
-			p.log().Error("torrents: push the holds (retried)", "holds", len(h), "err", err)
+		} else {
+			p.sigAt = time.Time{} // retried at the next tick
+			if ctx.Err() == nil {
+				p.log().Error("torrents: push the holds (retried)", "holds", len(h), "err", err)
+			}
 		}
 		return err
 	}
@@ -188,6 +216,16 @@ func downloads(list []Info) int {
 		}
 	}
 	return n
+}
+
+// shapes is the torrents' shapes, with whether each is being organized.
+func (p *Pusher) shapes(list []Info) []shape {
+	out := make([]shape, len(list))
+	for i, in := range list {
+		out[i] = shapeOf(in.Status)
+		out[i].Busy = p.Busy != nil && p.Busy(lower(in.Status.InfoHash))
+	}
+	return out
 }
 
 func (p *Pusher) build(list []Info) ([]addonkit.Hold, int) {

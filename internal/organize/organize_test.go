@@ -2,9 +2,13 @@ package organize
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -171,6 +175,118 @@ func TestOrganizeCopiesWhenLinkFails(t *testing.T) {
 	c, _ := os.Stat(paths[0])
 	if os.SameFile(a, c) {
 		t.Fatal("expected a copy")
+	}
+}
+
+// Jobs placing different files under one name (links failing: the copy
+// path) all end up in the library, each under its own name; none replaces
+// another's file and no partial copy is left.
+func TestPlaceConcurrentCopiesKeepAll(t *testing.T) {
+	root := t.TempDir()
+	old := linkFile
+	linkFile = func(string, string) error { return os.ErrPermission }
+	t.Cleanup(func() { linkFile = old })
+	dst := filepath.Join(root, "lib", "Show S01E01.mkv")
+	const n = 8
+	want := map[string]string{} // source → its content
+	srcs := make([]string, n)
+	for i := range srcs {
+		body := strings.Repeat("x", i+1)
+		srcs[i] = writeFile(t, root, fmt.Sprintf("torrents/%d/e.mkv", i), body)
+		want[srcs[i]] = body
+	}
+	got := make([]string, n)
+	var wg sync.WaitGroup
+	for i := range srcs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			p, err := Place(context.Background(), srcs[i], dst)
+			if err != nil {
+				t.Errorf("place %d: %v", i, err)
+			}
+			got[i] = p
+		}()
+	}
+	wg.Wait()
+	seen := map[string]bool{}
+	for i, p := range got {
+		b, err := os.ReadFile(p)
+		if err != nil || string(b) != want[srcs[i]] {
+			t.Errorf("job %d: %q at %s (%v), want %q", i, b, p, err, want[srcs[i]])
+		}
+		if seen[p] {
+			t.Errorf("two jobs share %s", p)
+		}
+		seen[p] = true
+	}
+	if left, _ := filepath.Glob(filepath.Join(root, "lib", "*"+PartialSuffix)); len(left) != 0 {
+		t.Fatalf("partial copies left: %v", left)
+	}
+}
+
+// A dangling symlink at the target name is taken (Stat says free, link and
+// copy say exists): the file goes to the numbered sibling, the loop ends,
+// the symlink stays. Both with links and with the copy path.
+func TestPlaceSkipsDanglingSymlink(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		link func(string, string) error
+	}{
+		{"link", os.Link},
+		{"copy", func(string, string) error { return os.ErrPermission }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			old := linkFile
+			linkFile = tc.link
+			t.Cleanup(func() { linkFile = old })
+			src := writeFile(t, root, "torrents/e.mkv", "data")
+			dst := filepath.Join(root, "lib", "Show S01E01.mkv")
+			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(filepath.Join(root, "gone"), dst); err != nil {
+				t.Skip("no symlinks here:", err)
+			}
+			type res struct {
+				p   string
+				err error
+			}
+			done := make(chan res, 1)
+			go func() { p, err := Place(context.Background(), src, dst); done <- res{p, err} }()
+			select {
+			case r := <-done:
+				want := filepath.Join(root, "lib", "Show S01E01 (2).mkv")
+				if r.err != nil || r.p != want {
+					t.Fatalf("placed %q, %v; want %q", r.p, r.err, want)
+				}
+				if b, err := os.ReadFile(r.p); err != nil || string(b) != "data" {
+					t.Fatalf("%q %v", b, err)
+				}
+				if _, err := os.Readlink(dst); err != nil {
+					t.Fatalf("the symlink was replaced: %v", err)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("Place does not return on a dangling symlink")
+			}
+		})
+	}
+}
+
+// copyFile never replaces a file that is there.
+func TestCopyFileKeepsExisting(t *testing.T) {
+	root := t.TempDir()
+	src := writeFile(t, root, "a/src.mkv", "new")
+	dst := writeFile(t, root, "b/dst.mkv", "old")
+	if err := copyFile(context.Background(), src, dst); !errors.Is(err, fs.ErrExist) {
+		t.Fatalf("err = %v, want ErrExist", err)
+	}
+	if b, _ := os.ReadFile(dst); string(b) != "old" {
+		t.Fatalf("dst replaced: %q", b)
+	}
+	if left, _ := filepath.Glob(filepath.Join(root, "b", "*"+PartialSuffix)); len(left) != 0 {
+		t.Fatalf("partial copies left: %v", left)
 	}
 }
 

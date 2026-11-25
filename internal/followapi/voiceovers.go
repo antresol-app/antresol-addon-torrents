@@ -6,6 +6,7 @@ import (
 
 	"github.com/antresol-app/antresol-addon-torrents/internal/acquire"
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/library"
+	"github.com/antresol-app/antresol-addon-torrents/internal/httpx"
 	"github.com/antresol-app/antresol/addonkit"
 )
 
@@ -27,27 +28,27 @@ type voiceAPI struct{ Deps }
 // item is the library item of {id} when the profile may see it; false:
 // 404 (or the error) written.
 func (v *voiceAPI) item(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	id, ok := idParam(w, r, "id")
+	id, ok := httpx.IDParam(w, r, "id")
 	if !ok {
 		return 0, false
 	}
 	it, err := v.Library.Item(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, library.ErrNotFound) {
-			writeErr(w, r, http.StatusNotFound, "Не найдено")
+			httpx.WriteErr(w, r, http.StatusNotFound, "Не найдено")
 		} else {
-			internalErr(w, r, "voice-over item", err)
+			httpx.InternalErr(w, r, "followapi", "voice-over item", err)
 		}
 		return 0, false
 	}
 	// an item over the profile's rating limit is not told apart from none
 	ok, err = itemVisible(r.Context(), v.Library, user(r), it)
 	if err != nil {
-		internalErr(w, r, "voice-over gate", err)
+		httpx.InternalErr(w, r, "followapi", "voice-over gate", err)
 		return 0, false
 	}
 	if !ok {
-		writeErr(w, r, http.StatusNotFound, "Не найдено")
+		httpx.WriteErr(w, r, http.StatusNotFound, "Не найдено")
 		return 0, false
 	}
 	return id, true
@@ -60,7 +61,7 @@ func (v *voiceAPI) find(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := v.Acquire.FindVoiceOvers(r.Context(), id)
 	if err != nil {
-		acquireErr(w, r, "voice-overs", err)
+		httpx.AcquireErr(w, r, "followapi", "voice-overs", err)
 		return
 	}
 	addonkit.WriteJSON(w, http.StatusOK, res)
@@ -74,7 +75,7 @@ func (v *voiceAPI) download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req acquire.VoiceOverRequest
-	if !decode(w, r, &req) {
+	if !httpx.Decode(w, r, &req) {
 		return
 	}
 	u := user(r)
@@ -82,7 +83,7 @@ func (v *voiceAPI) download(w http.ResponseWriter, r *http.Request) {
 	req.Force = req.Force && u.IsAdmin
 	res, err := v.Acquire.DownloadVoiceOver(r.Context(), req)
 	if err != nil {
-		acquireErr(w, r, "voice-over download", err)
+		httpx.AcquireErr(w, r, "followapi", "voice-over download", err)
 		return
 	}
 	v.added()
@@ -96,12 +97,12 @@ func (v *voiceAPI) preview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req acquire.VoiceOverRequest
-	if !decode(w, r, &req) {
+	if !httpx.Decode(w, r, &req) {
 		return
 	}
 	res, err := v.Acquire.PreviewVoiceOver(r.Context(), id, req.ID)
 	if err != nil {
-		acquireErr(w, r, "voice-over files", err)
+		httpx.AcquireErr(w, r, "followapi", "voice-over files", err)
 		return
 	}
 	addonkit.WriteJSON(w, http.StatusOK, res)
@@ -115,7 +116,7 @@ func (v *voiceAPI) downloads(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := v.Acquire.VoiceOverDownloads(r.Context(), id)
 	if err != nil {
-		internalErr(w, r, "voice-over downloads", err)
+		httpx.InternalErr(w, r, "followapi", "voice-over downloads", err)
 		return
 	}
 	if res == nil {

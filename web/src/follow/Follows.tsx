@@ -17,7 +17,7 @@ import type { Follow, FollowChecked, FollowQueued } from '../types'
 import { FOLLOW_CHECKED, FOLLOW_QUEUED } from './events'
 import styles from './Follows.module.css'
 
-const { Badge, Button, Sheet, Toast, Toggle } = ui
+const { Badge, Button, Sheet, Spinner, Toast, Toggle } = ui
 
 type State = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; list: Follow[] }
 
@@ -304,7 +304,7 @@ export function Follows({ mine = false }: FollowsProps) {
       </header>
       {state.status === 'loading' && (
         <div className={m.spinnerRow} role="status">
-          <span className={m.spinner} aria-hidden /> {t('downloads.loading')}
+          <Spinner track className={m.spinner} /> {t('downloads.loading')}
         </div>
       )}
       {state.status === 'error' && (

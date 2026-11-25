@@ -157,25 +157,20 @@
   color: var(--warning);
   margin-bottom: var(--s-2);
 }
-.skeletonLine {
-  background: var(--fill-3);
-  animation: pulse 1.6s var(--ease-in-out) infinite;
-}
+/* the lines are ui/Skeleton blocks: here their size and place */
 .skeletonLine {
   height: 12px;
-  border-radius: var(--r-sm);
   margin-top: var(--s-1h);
 }
-@keyframes pulse {
-  50% {
-    opacity: 0.5;
-  }
+.skeletonKicker {
+  width: 30%;
 }
-@media (prefers-reduced-motion: reduce) {
-  .skeleton,
-  .skeletonLine {
-    animation: none;
-  }
+.skeletonName {
+  width: 55%;
+  height: 18px;
+}
+.skeletonOverview {
+  width: 80%;
 }
 @media (max-width: 699px) {
   .poster {

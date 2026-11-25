@@ -14,7 +14,7 @@ import { tr, useT } from '../i18n'
 import type { VoiceOverCandidate, VoiceOverCoverage, VoiceOverDownload, VoiceOverEpisode, VoiceOvers } from '../types'
 import styles from './VoiceOverSheet.module.css'
 
-const { Button, Sheet } = ui
+const { Button, Sheet, Spinner } = ui
 
 export interface VoiceOverSheetProps {
   /** The film or series (library item id). */
@@ -227,7 +227,7 @@ export function VoiceOverSheet({ itemId, title, onClose, container, pollMs = 300
     <Sheet title={t('vo.title')} message={title} role="dialog" size="large" dismissOnOutside container={container} onCancel={onClose}>
       {state.status === 'loading' && (
         <p className={styles.state} role="status">
-          <span className={styles.spinner} aria-hidden /> {t('vo.searching')}
+          <Spinner track className={styles.spinner} /> {t('vo.searching')}
         </p>
       )}
       {state.status === 'error' && (
@@ -298,7 +298,7 @@ function DownloadState({ studio, download: d }: { studio: string; download?: Voi
       <p className={styles.meta} role="status">
         {fitting ? (
           <>
-            <span className={styles.spinner} aria-hidden /> {t('vo.fitting')}
+            <Spinner track className={styles.spinner} /> {t('vo.fitting')}
           </>
         ) : (
           <>

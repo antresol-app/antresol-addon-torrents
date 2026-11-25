@@ -170,23 +170,11 @@
   display: flex;
   gap: var(--s-2);
 }
+/* ui/Spinner's ring, bigger and thicker */
 .spinner {
-  width: 26px;
-  height: 26px;
-  border: 2.5px solid var(--fill-1);
-  border-top-color: var(--label);
-  border-radius: 50%;
-  animation: spin 0.9s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .spinner {
-    animation-duration: 2.4s;
-  }
+  --spinner-size: 26px;
+  --spinner-width: 2.5px;
+  color: var(--label);
 }
 @media (max-width: 699px) {
   .footer {

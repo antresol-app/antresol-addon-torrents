@@ -474,7 +474,7 @@ func (r *Runner) checkErrors(resp *response, blocks []ErrorBlock, vars map[strin
 				msg = m
 			}
 		}
-		msg = strings.Join(strings.Fields(msg), " ")
+		msg = pageMessage(msg)
 		if msg == "" {
 			msg = "сайт сообщил об ошибке"
 		}
@@ -529,7 +529,7 @@ func (r *Runner) loginNeeded(resp *response) bool {
 	if ct != "" && !strings.Contains(ct, "text/html") {
 		return false
 	}
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(r.text(resp)))
+	doc, err := r.htmlDoc(resp)
 	if err != nil {
 		return true
 	}

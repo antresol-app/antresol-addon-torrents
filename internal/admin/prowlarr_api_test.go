@@ -80,3 +80,20 @@ func TestImportProwlarr_UsesKeptAPIConnection(t *testing.T) {
 		t.Fatalf("refused key: %d %s", w.Code, w.Body)
 	}
 }
+
+// A path other than a prowlarr.db is refused: the importer snapshots the
+// file it is given, so no other SQLite file of the host is read this way.
+func TestImportProwlarr_OnlyProwlarrDB(t *testing.T) {
+	e := newEnv(t, false, false)
+	p := &fakeProwlarrAPI{kept: true}
+	e.withProwlarrAPI(p)
+	for _, path := range []string{"/data/torrents.db", "/prowlarr/../data/torrents.db", "/prowlarr/"} {
+		w := e.do("POST", "/api/admin/sources/import-prowlarr", `{"via":"file","path":"`+path+`"}`, &admin)
+		if w.Code != http.StatusBadRequest || !strings.Contains(errorOf(w), "prowlarr.db") {
+			t.Fatalf("%s: %d %s", path, w.Code, w.Body)
+		}
+	}
+	if p.calls != 0 {
+		t.Fatalf("the API was asked %d times", p.calls)
+	}
+}

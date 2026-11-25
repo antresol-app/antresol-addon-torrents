@@ -125,6 +125,7 @@ func Boot(ctx context.Context, c Conf, d Deps) (b Booted, err error) {
 	}
 	eng, err := d.NewEngine(torrent.EngineConfig{
 		NoSeeding:    noSeeding,
+		NoUpload:     c.ForcedNoSeeding, // for good: the client itself never uploads
 		UploadLimit:  upload,
 		DataDir:      c.DataDir,
 		StreamDir:    c.StreamDir,

@@ -84,13 +84,13 @@
 .bar {
   overflow: hidden;
   height: 4px;
-  border-radius: 2px;
+  border-radius: var(--r-xs);
   background: var(--fill-2);
 }
 .bar > span {
   display: block;
   height: 100%;
-  border-radius: 2px;
+  border-radius: var(--r-xs);
   background: var(--accent);
   transition: width 0.4s ease;
 }
@@ -120,7 +120,7 @@
 .code {
   flex: none;
   min-width: 48px;
-  font-weight: 600;
+  font-weight: var(--w-semibold);
   color: var(--label);
 }
 .good > span:last-child {
@@ -138,22 +138,11 @@
   color: var(--label-2);
 }
 .spinner {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--fill-1);
-  border-top-color: var(--label-2);
-  border-radius: 50%;
-  animation: spin 0.9s linear infinite;
+  --spinner-size: 14px;
+  color: var(--label-2);
 }
 .state .spinner {
-  width: 18px;
-  height: 18px;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  --spinner-size: 18px;
 }
 .empty {
   display: flex;
@@ -169,13 +158,10 @@
   color: var(--label-3);
 }
 .emptyTitle {
-  font-weight: 600;
+  font-weight: var(--w-semibold);
   color: var(--label);
 }
 @media (prefers-reduced-motion: reduce) {
-  .spinner {
-    animation: none;
-  }
   .bar > span {
     transition: none;
   }

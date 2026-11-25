@@ -76,6 +76,7 @@ type engOpts struct {
 	stalledAfter, incomingAfter time.Duration
 	persist                     time.Duration // EngineConfig.persistEvery (0 = the default)
 	noSeeding                   bool          // EngineConfig.NoSeeding
+	noUpload                    bool          // EngineConfig.NoUpload
 }
 
 func openEngine(t *testing.T, dataDir string, o engOpts) *Engine {
@@ -88,7 +89,6 @@ func openEngine(t *testing.T, dataDir string, o engOpts) *Engine {
 		DataDir:            dataDir,
 		StreamDir:          filepath.Join(dataDir, "stream"),
 		ListenPort:         0,
-		Seed:               true,
 		UploadLimit:        o.upLimit,
 		LocalOnly:          true,
 		ReadTimeout:        o.readTimeout,
@@ -98,6 +98,7 @@ func openEngine(t *testing.T, dataDir string, o engOpts) *Engine {
 		tick:               100 * time.Millisecond,
 		persistEvery:       o.persist,
 		NoSeeding:          o.noSeeding,
+		NoUpload:           o.noUpload,
 	}, d)
 	if err != nil {
 		d.Close()
@@ -323,7 +324,7 @@ func TestRestartResumes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := EngineConfig{DataDir: dataDir, StreamDir: filepath.Join(dataDir, "stream"), Seed: true, LocalOnly: true, StallTimeout: 2 * time.Second, tick: 100 * time.Millisecond}
+	cfg := EngineConfig{DataDir: dataDir, StreamDir: filepath.Join(dataDir, "stream"), LocalOnly: true, StallTimeout: 2 * time.Second, tick: 100 * time.Millisecond}
 	leech, err := New(cfg, d)
 	if err != nil {
 		t.Fatal(err)
@@ -578,7 +579,7 @@ func TestPromoteCompletedStream(t *testing.T) {
 	if b, err := os.ReadFile(filepath.Join(target, fx.name)); err != nil || !bytes.Equal(b, fx.data) {
 		t.Fatalf("promoted file: %v", err)
 	}
-	if err := leech.SetMode(context.Background(), fx.ih, ModeStream); err == nil {
+	if err := leech.SetModeTo(context.Background(), fx.ih, ModeStream, ""); err == nil {
 		t.Fatal("download -> stream must be refused")
 	}
 }

@@ -31,6 +31,7 @@ import (
 	"github.com/antresol-app/antresol-addon-torrents/internal/acquire"
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/i18n"
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/metadata/tmdb"
+	"github.com/antresol-app/antresol-addon-torrents/internal/httpx"
 	"github.com/antresol-app/antresol-addon-torrents/internal/indexer"
 	"github.com/antresol-app/antresol/addonkit"
 )
@@ -71,14 +72,14 @@ type AppDeps struct {
 // RegisterApp adds the app routes to mux (the profiles' /api/ routes).
 func RegisterApp(mux *http.ServeMux, d AppDeps) {
 	h := &appHandlers{handlers: handlers{d.Deps}, d: d}
-	mux.Handle("GET /api/app", adults(h.offered(h.info)))
-	mux.Handle("GET /api/app/search", adults(h.offered(h.search)))
-	mux.Handle("POST /api/app/step", adults(h.offered(h.step)))
-	mux.Handle("POST /api/app/run", adults(h.offered(h.run)))
+	mux.Handle("GET /api/app", httpx.Adults(h.offered(h.info)))
+	mux.Handle("GET /api/app/search", httpx.Adults(h.offered(h.search)))
+	mux.Handle("POST /api/app/step", httpx.Adults(h.offered(h.step)))
+	mux.Handle("POST /api/app/run", httpx.Adults(h.offered(h.run)))
 	// a download that runs can be watched and stopped whatever the sources
 	// do now
-	mux.Handle("GET /api/app/state", adults(http.HandlerFunc(h.state)))
-	mux.Handle("POST /api/app/cancel", adults(http.HandlerFunc(h.cancel)))
+	mux.Handle("GET /api/app/state", httpx.Adults(http.HandlerFunc(h.state)))
+	mux.Handle("POST /api/app/cancel", httpx.Adults(http.HandlerFunc(h.cancel)))
 }
 
 type appHandlers struct {
@@ -98,7 +99,7 @@ func (h *appHandlers) offered(next http.HandlerFunc) http.HandlerFunc {
 			ok, err := h.d.HasSources(r.Context())
 			if err != nil {
 				slog.Warn("find: app sources", "err", err)
-				writeErr(w, r, http.StatusInternalServerError, "Внутренняя ошибка сервера")
+				httpx.WriteErr(w, r, http.StatusInternalServerError, "Внутренняя ошибка сервера")
 				return
 			}
 			if !ok {
@@ -167,7 +168,7 @@ func (h *appHandlers) search(w http.ResponseWriter, r *http.Request) {
 	ctx := tmdb.WithLanguage(r.Context(), i18n.TMDB(i18n.FromContext(r.Context())))
 	cs, err := h.Acquire.Discover(ctx, r.URL.Query().Get("q"))
 	if err != nil {
-		acquireErr(w, r, "app search", err)
+		httpx.AcquireErr(w, r, "find", "app search", err)
 		return
 	}
 	out := make([]appTitle, 0, len(cs))
@@ -262,15 +263,15 @@ type appCall struct {
 // written.
 func (h *appHandlers) readCall(w http.ResponseWriter, r *http.Request) (appCall, *appRef, bool) {
 	var in appCall
-	if !decode(w, r, &in) {
+	if !httpx.Decode(w, r, &in) {
 		return in, nil, false
 	}
 	if in.Way != wayWatch && in.Way != wayKeep {
-		writeErr(w, r, http.StatusNotFound, "Не найдено") // the way is gone: the app asks again what there is
+		httpx.WriteErr(w, r, http.StatusNotFound, "Не найдено") // the way is gone: the app asks again what there is
 		return in, nil, false
 	}
 	if in.TMDBID <= 0 || in.Season < 0 || in.Episode < 0 || (in.Kind != acquire.KindMovie && in.Kind != acquire.KindSeries) {
-		writeErr(w, r, http.StatusBadRequest, "Неизвестный фильм или сериал")
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Неизвестный фильм или сериал")
 		return in, nil, false
 	}
 	if in.Kind == acquire.KindMovie {
@@ -278,7 +279,7 @@ func (h *appHandlers) readCall(w http.ResponseWriter, r *http.Request) (appCall,
 	}
 	ref, ok := parseRef(in.Ref)
 	if !ok {
-		writeErr(w, r, http.StatusBadRequest, "Неверный запрос")
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Неверный запрос")
 		return in, nil, false
 	}
 	return in, ref, true
@@ -321,7 +322,7 @@ func (h *appHandlers) step(w http.ResponseWriter, r *http.Request) {
 		case refQuality:
 			season, quality, chosen = ref.S, ref.Q, true
 		default: // a release is a final row: it has no step
-			writeErr(w, r, http.StatusBadRequest, "Неверный запрос")
+			httpx.WriteErr(w, r, http.StatusBadRequest, "Неверный запрос")
 			return
 		}
 	}
@@ -350,7 +351,7 @@ func (h *appHandlers) seasonsOf(w http.ResponseWriter, r *http.Request, tmdbID i
 	}
 	seasons, err := h.d.Seasons(r.Context(), tmdbID)
 	if err != nil {
-		acquireErr(w, r, "app seasons", err)
+		httpx.AcquireErr(w, r, "find", "app seasons", err)
 		return nil, false
 	}
 	return seasons, true
@@ -414,7 +415,7 @@ func (h *appHandlers) releaseStep(w http.ResponseWriter, r *http.Request, in app
 	resp, err := h.Acquire.Releases(indexer.WithSettle(r.Context(), indexer.SettleGrace, indexer.SettleCap),
 		acquire.ReleaseRequest{TMDBID: in.TMDBID, Kind: in.Kind, Season: season, Episode: episode, Langs: mine}, nil)
 	if err != nil {
-		acquireErr(w, r, "app releases", err)
+		httpx.AcquireErr(w, r, "find", "app releases", err)
 		return
 	}
 	resp = mineResponse(resp, mine)
@@ -579,7 +580,7 @@ func (h *appHandlers) run(w http.ResponseWriter, r *http.Request) {
 	season, episode, quality := in.Season, in.Episode, ""
 	if ref != nil {
 		if ref.K != refRelease && ref.K != refBest {
-			writeErr(w, r, http.StatusBadRequest, "Неверный запрос") // a step's row is not a start
+			httpx.WriteErr(w, r, http.StatusBadRequest, "Неверный запрос") // a step's row is not a start
 			return
 		}
 		season, episode, quality, link, src = ref.S, ref.E, ref.Q, ref.L, ref.Src
@@ -587,7 +588,7 @@ func (h *appHandlers) run(w http.ResponseWriter, r *http.Request) {
 			season, episode = 0, 0
 		}
 	} else if !in.Quick {
-		writeErr(w, r, http.StatusBadRequest, "Неверный запрос")
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Неверный запрос")
 		return
 	}
 	if in.Kind == acquire.KindSeries && (season == 0 || (in.Way == wayWatch && episode == 0)) {
@@ -629,7 +630,7 @@ func (h *appHandlers) runWatch(w http.ResponseWriter, r *http.Request, in appCal
 	res, err := h.acquireAs(actx, u, h.myLanguages(r), acquire.AcquireRequest{TMDBID: in.TMDBID, Kind: in.Kind,
 		Season: season, Episode: episode, Mode: acquire.ModeStream, ReleaseLink: link, SourceID: src})
 	if err != nil {
-		acquireErr(w, r, "app watch", err)
+		httpx.AcquireErr(w, r, "find", "app watch", err)
 		return
 	}
 	id, err := h.d.Watch(ctx, u, strings.ToLower(res.InfoHash), res.FileIndex)
@@ -646,14 +647,14 @@ func (h *appHandlers) watchErr(w http.ResponseWriter, r *http.Request, err error
 		h.d.WatchError(w, r, "app watch", err)
 		return
 	}
-	acquireErr(w, r, "app watch", err)
+	httpx.AcquireErr(w, r, "find", "app watch", err)
 }
 
 func (h *appHandlers) runKeep(w http.ResponseWriter, r *http.Request, in appCall, season int, quality, link string, src int64) {
 	res, err := h.acquireAs(r.Context(), user(r), h.myLanguages(r), acquire.AcquireRequest{TMDBID: in.TMDBID, Kind: in.Kind,
 		Season: season, Mode: acquire.ModeDownload, ReleaseLink: link, SourceID: src, Quality: quality, Resolution: quality})
 	if err != nil {
-		acquireErr(w, r, "app download", err)
+		httpx.AcquireErr(w, r, "find", "app download", err)
 		return
 	}
 	msg := tr(r, "Загрузка началась")
@@ -688,7 +689,7 @@ func titleOf(w http.ResponseWriter, r *http.Request) (kind string, tmdbID, seaso
 		season, err2 = strconv.Atoi(v)
 	}
 	if err1 != nil || err2 != nil || tmdbID <= 0 || season < 0 || (kind != acquire.KindMovie && kind != acquire.KindSeries) {
-		writeErr(w, r, http.StatusBadRequest, "Неизвестный фильм или сериал")
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Неизвестный фильм или сериал")
 		return "", 0, 0, false
 	}
 	return kind, tmdbID, season, true
@@ -731,12 +732,12 @@ func (h *appHandlers) cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.Way != wayKeep {
-		writeErr(w, r, http.StatusNotFound, "Не найдено")
+		httpx.WriteErr(w, r, http.StatusNotFound, "Не найдено")
 		return
 	}
 	n, err := h.Acquire.CancelTitle(r.Context(), in.Kind, in.TMDBID, in.Season, "")
 	if err != nil {
-		acquireErr(w, r, "app cancel", err)
+		httpx.AcquireErr(w, r, "find", "app cancel", err)
 		return
 	}
 	msg := tr(r, "Загрузка отменена")

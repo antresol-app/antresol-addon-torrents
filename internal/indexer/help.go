@@ -64,7 +64,7 @@ func settingSpec(d *cardigann.Definition, s cardigann.Setting) (SettingSpec, boo
 		credential := known.required && (d.Login != nil || (s.Name != "username" && s.Name != "password"))
 		spec.Required = credential && s.Default == ""
 	}
-	if t == "password" {
+	if t == "password" || (t == "text" || t == "") && cardigann.IsSecretName(s.Name) {
 		spec.Secret = true
 	}
 	for _, o := range s.Options {
@@ -93,9 +93,14 @@ func isSecret(def *cardigann.Definition, name string) bool {
 	}
 	if def != nil {
 		for _, s := range def.Settings {
-			if s.Name == name && strings.EqualFold(s.Type, "password") {
-				return true
+			if s.Name != name {
+				continue
 			}
+			// a text field by a credential's name (pin, staffpass,
+			// csrf_token) is one too; a checkbox («use freeleech
+			// tokens») is not
+			t := strings.ToLower(s.Type)
+			return t == "password" || (t == "text" || t == "") && cardigann.IsSecretName(name)
 		}
 	}
 	return false

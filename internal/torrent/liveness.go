@@ -26,6 +26,7 @@ import (
 	"github.com/anacrolix/torrent/metainfo"
 	pp "github.com/anacrolix/torrent/peer_protocol"
 	"github.com/anacrolix/torrent/tracker/udp"
+	"github.com/antresol-app/antresol-addon-torrents/internal/netguard"
 )
 
 // Liveness of a torrent's swarm (Status.Liveness): what a short probe of
@@ -176,7 +177,12 @@ func (s *selfAddrs) has(ip net.IP) bool {
 
 // prober runs liveness probes. Its fields are seams for the tests.
 type prober struct {
+	// hc asks HTTP trackers, listen opens the socket UDP trackers are
+	// asked from (nil: net.ListenPacket). The tracker URLs come from
+	// torrents anyone can publish: outside tests both refuse local
+	// addresses (netguard), as the client's own announces do.
 	hc     *http.Client
+	listen func(network, addr string) (net.PacketConn, error)
 	peerID [20]byte
 	port   func() int
 	self   *selfAddrs
@@ -445,7 +451,7 @@ func (p *prober) httpAnnounce(ctx context.Context, raw string, ih [20]byte) prob
 	req.Header.Set("User-Agent", "Antresol")
 	hc := p.hc
 	if hc == nil {
-		hc = http.DefaultClient
+		hc = guardedClient
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
@@ -535,13 +541,16 @@ func compactPeers(b []byte, ipLen int) []peerAddr {
 
 var discardLog = slog.New(slog.DiscardHandler)
 
+// guardedClient: what a prober without a client of its own asks with.
+var guardedClient = netguard.HTTPClient(trackerTimeout)
+
 // udpAnnounce is a BEP 15 announce with our peer id and port.
 func (p *prober) udpAnnounce(ctx context.Context, u *url.URL, ih [20]byte) probeMsg {
 	network := "udp"
 	if u.Scheme != "udp" {
 		network = u.Scheme
 	}
-	cc, err := udp.NewConnClient(udp.NewConnClientOpts{Network: network, Host: u.Host, Logger: discardLog})
+	cc, err := udp.NewConnClient(udp.NewConnClientOpts{Network: network, Host: u.Host, Logger: discardLog, ListenPacket: p.listen})
 	if err != nil {
 		return probeMsg{}
 	}
@@ -735,11 +744,15 @@ func (e *Engine) initProbe(cl *atorrent.Client) {
 		}
 	}
 	pr := &prober{
-		hc:     &http.Client{Timeout: trackerTimeout},
+		hc:     guardedClient,
+		listen: netguard.ListenPacket,
 		peerID: cl.PeerID(),
 		port:   cl.LocalPort,
 		self:   e.self,
 		dht:    cl.DhtServers,
+	}
+	if e.cfg.LocalOnly { // tests: their trackers are on loopback
+		pr.hc, pr.listen = &http.Client{Timeout: trackerTimeout}, nil
 	}
 	e.probe = pr.probe
 }

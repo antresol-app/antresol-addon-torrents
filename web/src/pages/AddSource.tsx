@@ -14,7 +14,7 @@ import { Link, useNavigate, useParams } from 'react-router'
 import m from './Manage.module.css'
 import styles from './Sources.module.css'
 
-const { Button, Select, TextField, Toggle } = ui
+const { Button, Select, Spinner, TextArea, TextField, Toggle } = ui
 
 /** The trackers most people here want, in this order. */
 export const POPULAR = ['rutracker', 'rutracker-org-cookie', 'rutor', 'kinozal', 'noname-club', 'opds']
@@ -96,7 +96,7 @@ export function EditSource() {
   if (!source) {
     return (
       <div className={m.spinnerRow} role="status">
-        <span className={m.spinner} aria-hidden /> {t('sources.loading')}
+        <Spinner track className={m.spinner} /> {t('sources.loading')}
       </div>
     )
   }
@@ -147,19 +147,18 @@ function CatalogSearch() {
           <p className={m.subtitle}>{t('sources.add.subtitle')}</p>
         </div>
       </header>
-      <div className={styles.search}>
-        <Icon name="search" size={19} className={styles.searchIcon} />
-        <input
-          ref={input}
-          type="search"
-          className={styles.searchInput}
-          placeholder={t('sources.add.placeholder')}
-          aria-label={t('sources.add.searchAria')}
-          value={q}
-          onChange={(e) => (setQ(e.target.value), setAll(false))}
-          spellCheck={false}
-        />
-      </div>
+      <TextField
+        ref={input}
+        type="search"
+        className={styles.search}
+        label={t('sources.add.searchAria')}
+        hideLabel
+        placeholder={t('sources.add.placeholder')}
+        value={q}
+        onChange={(e) => (setQ(e.target.value), setAll(false))}
+        onClear={() => (setQ(''), setAll(false))}
+        spellCheck={false}
+      />
       {error && (
         <div className={m.problem} role="alert">
           {error}
@@ -167,7 +166,7 @@ function CatalogSearch() {
       )}
       {!list && !error && (
         <div className={m.spinnerRow} role="status">
-          <span className={m.spinner} aria-hidden /> {t('sources.add.loadingSites')}
+          <Spinner track className={m.spinner} /> {t('sources.add.loadingSites')}
         </div>
       )}
       {list && list.length === 0 && <p className={m.groupFoot}>{t('sources.add.noSuchSite')}</p>}
@@ -222,7 +221,7 @@ function Help({ text, id }: { text: string; id: string }) {
         ))}
       </ol>
       {after.map((l) => (
-        <p key={l} style={{ marginTop: 8 }}>
+        <p key={l} className={styles.helpAfter}>
           {l}
         </p>
       ))}
@@ -261,12 +260,10 @@ function Field({ f, value, onChange }: { f: CatalogField; value: string; onChang
   if (f.name.toLowerCase() === 'cookie') {
     return (
       <div>
-        <label className={styles.label} htmlFor={`f-${f.name}`}>
-          {f.label}
-        </label>
-        <textarea
+        <TextArea
           id={`f-${f.name}`}
-          className={styles.textarea}
+          label={f.label}
+          rows={3}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={t('sources.form.cookiePlaceholder')}
@@ -370,7 +367,7 @@ function SourceForm({ id, editing }: { id: string; editing?: Source }) {
   if (!entry) {
     return (
       <div className={m.spinnerRow} role="status">
-        <span className={m.spinner} aria-hidden /> {t('sources.loading')}
+        <Spinner track className={m.spinner} /> {t('sources.loading')}
       </div>
     )
   }

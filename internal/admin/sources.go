@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/i18n"
+	"github.com/antresol-app/antresol-addon-torrents/internal/httpx"
 	"github.com/antresol-app/antresol-addon-torrents/internal/indexer"
 	"github.com/antresol-app/antresol/addonkit"
 )
@@ -79,11 +81,11 @@ func sourceErr(w http.ResponseWriter, r *http.Request, what string, err error) {
 	case errors.As(err, &ve):
 		addonkit.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": i18n.Message(r.Context(), ve), "field": ve.Field})
 	case errors.Is(err, indexer.ErrNotFound):
-		writeErr(w, r, http.StatusNotFound, "Источник не найден")
+		httpx.WriteErr(w, r, http.StatusNotFound, "Источник не найден")
 	case errors.Is(err, indexer.ErrNoDefinition):
-		writeErr(w, r, http.StatusBadRequest, "Описание этого трекера не найдено")
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Описание этого трекера не найдено")
 	default:
-		internalErr(w, r, what, err)
+		httpx.InternalErr(w, r, "admin", what, err)
 	}
 }
 
@@ -101,7 +103,7 @@ func (s *sources) catalog(w http.ResponseWriter, r *http.Request) {
 func (s *sources) catalogEntry(w http.ResponseWriter, r *http.Request) {
 	e, ok := s.Sources.Catalog().Get(r.PathValue("id"))
 	if !ok {
-		writeErr(w, r, http.StatusNotFound, "Описание этого трекера не найдено")
+		httpx.WriteErr(w, r, http.StatusNotFound, "Описание этого трекера не найдено")
 		return
 	}
 	addonkit.WriteJSON(w, http.StatusOK, toCatalogEntry(r.Context(), e, true))
@@ -118,7 +120,7 @@ func (s *sources) view(r *http.Request, src indexer.Source) indexer.Source {
 func (s *sources) list(w http.ResponseWriter, r *http.Request) {
 	all, err := s.Sources.Sources(r.Context())
 	if err != nil {
-		internalErr(w, r, "sources", err)
+		httpx.InternalErr(w, r, "admin", "sources", err)
 		return
 	}
 	out := make([]indexer.Source, 0, len(all))
@@ -135,7 +137,7 @@ func (s *sources) add(w http.ResponseWriter, r *http.Request) {
 		DefinitionID string            `json:"definitionId"`
 		Settings     map[string]string `json:"settings"`
 	}
-	if !decode(w, r, &in) {
+	if !httpx.Decode(w, r, &in) {
 		return
 	}
 	src, err := s.Sources.Add(r.Context(), strings.TrimSpace(in.DefinitionID), in.Settings)
@@ -147,12 +149,12 @@ func (s *sources) add(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *sources) update(w http.ResponseWriter, r *http.Request) {
-	id, ok := idParam(w, r, "id")
+	id, ok := httpx.IDParam(w, r, "id")
 	if !ok {
 		return
 	}
 	var p indexer.SourcePatch
-	if !decode(w, r, &p) {
+	if !httpx.Decode(w, r, &p) {
 		return
 	}
 	src, err := s.Sources.Update(r.Context(), id, p)
@@ -166,7 +168,7 @@ func (s *sources) update(w http.ResponseWriter, r *http.Request) {
 // POST /api/admin/sources/{id}/test → the source with its new status; a
 // test that ran and failed is not an HTTP error (lastError says it).
 func (s *sources) test(w http.ResponseWriter, r *http.Request) {
-	id, ok := idParam(w, r, "id")
+	id, ok := httpx.IDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -183,14 +185,14 @@ func (s *sources) test(w http.ResponseWriter, r *http.Request) {
 	// a test that ran and failed is stored as status error + lastError;
 	// any other failure (the database) is ours
 	if terr != nil && (src.Status != indexer.StatusError || src.LastError == "") {
-		internalErr(w, r, "test source", terr)
+		httpx.InternalErr(w, r, "admin", "test source", terr)
 		return
 	}
 	addonkit.WriteJSON(w, http.StatusOK, s.view(r, src))
 }
 
 func (s *sources) remove(w http.ResponseWriter, r *http.Request) {
-	id, ok := idParam(w, r, "id")
+	id, ok := httpx.IDParam(w, r, "id")
 	if !ok {
 		return
 	}
@@ -212,10 +214,16 @@ func (s *sources) importProwlarr(w http.ResponseWriter, r *http.Request) {
 		Via  string `json:"via"`
 		Path string `json:"path"`
 	}
-	if r.ContentLength != 0 && !decode(w, r, &in) {
+	if r.ContentLength != 0 && !httpx.Decode(w, r, &in) {
 		return
 	}
 	p := strings.TrimSpace(in.Path)
+	// the importer snapshots the file it is given: only Prowlarr's own
+	// database name, never another SQLite file of this host
+	if p != "" && filepath.Base(filepath.Clean(p)) != "prowlarr.db" {
+		httpx.WriteErr(w, r, http.StatusBadRequest, "Укажите путь к файлу prowlarr.db")
+		return
+	}
 	var (
 		res []indexer.Imported
 		err error
@@ -248,10 +256,10 @@ func (s *sources) importProwlarr(w http.ResponseWriter, r *http.Request) {
 		}
 		var ie *indexer.ImportError
 		if !errors.As(err, &ie) {
-			internalErr(w, r, "import prowlarr", err)
+			httpx.InternalErr(w, r, "admin", "import prowlarr", err)
 			return
 		}
-		addonkit.WriteError(w, http.StatusBadRequest, i18n.Message(r.Context(), msgErr{ie.Msg, ie}))
+		addonkit.WriteError(w, http.StatusBadRequest, httpx.Message(r, ie.Msg, ie))
 		return
 	}
 	if res == nil {

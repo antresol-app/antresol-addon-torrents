@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/antresol-app/antresol-addon-torrents/internal/indexer/cardigann"
 	db "github.com/antresol-app/antresol-addon-torrents/internal/store"
 )
 
@@ -112,6 +113,13 @@ func (e *env) reload() {
 	e.t.Helper()
 	e.cat = NewCatalog(filepath.Join(e.dir, "definitions"))
 	e.m = NewManager(e.db, e.cat, Options{SearchTimeout: 2 * time.Second, TestTimeout: 2 * time.Second})
+}
+
+// forgetSearches drops the sources' answers the manager keeps for a while.
+func (e *env) forgetSearches() {
+	e.m.searches.mu.Lock()
+	e.m.searches.answers = nil
+	e.m.searches.mu.Unlock()
 }
 
 func (e *env) add(defID string) Source {
@@ -537,7 +545,7 @@ func TestHostOnSite(t *testing.T) {
 		"api.movies.example": true, "cdn.api.movies.example": true, "files.example": true, "movies.example": false,
 		"evilrutracker.org": false, "rutracker.org.evil.com": false, "org": false, "": false,
 	} {
-		if got := hostOnSite(sites, host); got != want {
+		if got := cardigann.HostOnSite(sites, host, true); got != want {
 			t.Errorf("%q: %v", host, got)
 		}
 	}
@@ -629,6 +637,7 @@ func TestSearchNamesTheTrackerOfAnswersAndFailures(t *testing.T) {
 	q := SearchRequest{Text: "Дюна", Kind: "movie", Year: 2024}
 	search := func() SearchResponse {
 		t.Helper()
+		e.forgetSearches() // each step asks the trackers anew (the answers are kept for a while)
 		resp, err := e.m.Search(context.Background(), q)
 		if err != nil {
 			t.Fatal(err)
@@ -712,6 +721,7 @@ func TestSearchBackupSourceOnlyWhenPrimaryFails(t *testing.T) {
 	}
 
 	primaryDown.Store(true)
+	e.forgetSearches()
 	resp, err = e.m.Search(ctx, q)
 	if err != nil {
 		t.Fatal(err)

@@ -368,34 +368,7 @@ func (m *Manager) Search(ctx context.Context, q SearchRequest) (SearchResponse, 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			var f found
-			if isOPDS(s) {
-				res, tags, err := m.searchOPDS(srcCtx, s, q, queries)
-				f = found{s, res, err, true, tags, true, nil, nil}
-			} else {
-				var res []Result
-				var err error
-				if m.isResting(s.ID) {
-					err = cardigann.ErrLoginFailed // not asked: no login attempt the tracker sees
-				} else {
-					res, err = m.searchSource(srcCtx, s, q, queries)
-				}
-				f = found{s, res, err, m.directDef(s), nil, true, nil, nil}
-				if b, ok := backup[s.ID]; ok && err != nil && srcCtx.Err() == nil && !m.isResting(b.ID) {
-					// the second way in, only now: the tracker is asked
-					// once per search, not twice
-					if res, berr := m.searchSource(srcCtx, b, q, queries); berr == nil {
-						m.log.Info("indexer: answered through the backup source", "source", s.Name, "backup", b.Name)
-						b.Name = s.Name // one tracker to the user; downloads go through b
-						f = found{b, res, nil, m.directDef(b), nil, true, nil, nil}
-					}
-				}
-				if len(f.results) > 0 && srcCtx.Err() == nil {
-					// the voice-overs of release pages (a Russian
-					// tracker's; topicBudget at most, cached)
-					f.topics = m.readTopics(srcCtx, f.src, q, f.results)
-				}
-			}
+			f := m.searchOne(srcCtx, s, backup, q, queries)
 			f.stands = stands[s.ID]
 			mu.Lock()
 			if settled {
@@ -438,6 +411,38 @@ func (m *Manager) Search(ctx context.Context, q SearchRequest) (SearchResponse, 
 		return SearchResponse{}, err
 	}
 	return m.assemble(ctx, q, prefs, final), nil
+}
+
+// searchOne asks one source (and, when it failed, its backup way in) and
+// reads the voice-overs of what it found.
+func (m *Manager) searchOne(ctx context.Context, s Source, backup map[int64]Source, q SearchRequest, queries []string) found {
+	if isOPDS(s) {
+		res, tags, err := m.searchOPDS(ctx, s, q, queries)
+		return found{src: s, results: res, err: err, direct: true, tags: tags, done: true}
+	}
+	var res []Result
+	var err error
+	if m.isResting(s.ID) {
+		err = cardigann.ErrLoginFailed // not asked: no login attempt the tracker sees
+	} else {
+		res, err = m.cachedSearch(ctx, s, q, queries)
+	}
+	f := found{src: s, results: res, err: err, direct: m.directDef(s), done: true}
+	if b, ok := backup[s.ID]; ok && err != nil && ctx.Err() == nil && !m.isResting(b.ID) {
+		// the second way in, only now: the tracker is asked once per
+		// search, not twice
+		if res, berr := m.cachedSearch(ctx, b, q, queries); berr == nil {
+			m.log.Info("indexer: answered through the backup source", "source", s.Name, "backup", b.Name)
+			b.Name = s.Name // one tracker to the user; downloads go through b
+			f = found{src: b, results: res, direct: m.directDef(b), done: true}
+		}
+	}
+	if len(f.results) > 0 && ctx.Err() == nil {
+		// the voice-overs of release pages (a Russian tracker's;
+		// topicBudget at most, cached)
+		f.topics = m.readTopics(ctx, f.src, q, f.results)
+	}
+	return f
 }
 
 // awaitSettled waits for the sources of a settling search; true: it settled

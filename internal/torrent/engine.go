@@ -37,6 +37,7 @@ import (
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/i18n"
+	"github.com/antresol-app/antresol-addon-torrents/internal/netguard"
 	"golang.org/x/time/rate"
 )
 
@@ -93,11 +94,8 @@ type EngineConfig struct {
 	StreamDir string // stream torrents live in StreamDir/<infohash>
 	// DownloadDir is where SetMode(stream→download) moves data when no
 	// explicit directory is given; "" keeps the data where it is.
-	DownloadDir string
-	ListenPort  int
-	// Seed is kept for the planned interface; seeding is always on (global
-	// constraint: Vault never stops seeding by itself).
-	Seed                       bool
+	DownloadDir                string
+	ListenPort                 int
 	UploadLimit, DownloadLimit int64 // bytes/s, 0 = unlimited
 	// ReadTimeout bounds how long one Read of a stream reader waits for data
 	// (default 60s). On expiry the Read fails with ErrReadTimeout.
@@ -143,6 +141,12 @@ type EngineConfig struct {
 	// NoSeeding: «Не раздавать», as it stands at start
 	// (SetNoSeeding changes it): see noseed.go.
 	NoSeeding bool
+	// NoUpload: the client itself never sends file data (anacrolix's
+	// NoUpload), whatever the per-torrent calls do. The server sets it when
+	// no-seeding is forced for the whole process life; a torrent attached
+	// by some future path that forgets DisallowDataUpload still gives
+	// nothing. Downloading is not touched.
+	NoUpload bool
 
 	tick time.Duration // stats sampling period (tests shorten it)
 	// persistEvery: how often the monitor saves the transfer counters
@@ -407,7 +411,6 @@ func New(cfg EngineConfig, db *sql.DB) (*Engine, error) {
 	if cfg.IncomingCheckAfter <= 0 {
 		cfg.IncomingCheckAfter = defaultIncomingCheckAfter
 	}
-	cfg.Seed = true
 	if cfg.Off {
 		e := &Engine{cfg: cfg, db: db, log: slog.Default().With("component", "torrent"),
 			entries: map[string]*entry{}, fetching: map[string]*fetch{}, closing: make(chan struct{}),
@@ -449,42 +452,7 @@ func New(cfg EngineConfig, db *sql.DB) (*Engine, error) {
 		e.log.Error("media disk is not available: torrents are held until it is back", "reason", offline)
 	}
 
-	cc := atorrent.NewDefaultClientConfig()
-	cc.DataDir = cfg.StreamDir
-	cc.DefaultStorage = e.fileStorage(cfg.StreamDir)
-	cc.ListenPort = cfg.ListenPort
-	cc.Seed = true
-	cc.DisableAggressiveUpload = cfg.noAggressiveUpload
-	cc.Slogger = slog.New(quietHandler{slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn})}).With("component", "anacrolix")
-	e.reqs.install(&cc.Callbacks)
-	e.installIncoming(&cc.Callbacks)
-	e.installPeerSeen(&cc.Callbacks)
-	e.installYourIP(&cc.Callbacks)
-	// Always our own limiter (anacrolix shares one "unlimited" instance
-	// between clients): the settings change it at runtime.
-	e.upLimit = rate.NewLimiter(rate.Inf, 0)
-	cc.UploadRateLimiter = e.upLimit
-	e.SetUploadLimit(cfg.UploadLimit)
-	if cfg.DownloadLimit > 0 {
-		cc.DownloadRateLimiter = rate.NewLimiter(rate.Limit(cfg.DownloadLimit), 0)
-	}
-	// Outside LocalOnly anacrolix asks the router for ListenPort (TCP and
-	// UDP) by UPnP at start (NoDefaultPortForwarding stays false). The
-	// discovery is multicast on the local network: behind Docker bridge
-	// networking it never reaches the router (deploy/README.md).
-	cc.NoDefaultPortForwarding = cfg.NoUPnP
-	if cfg.LocalOnly {
-		cc.NoDHT = true
-		cc.DisableTrackers = true
-		cc.DisablePEX = true
-		cc.NoDefaultPortForwarding = true
-		cc.DisableIPv6 = true
-		cc.DisableUTP = true
-		cc.DisableWebtorrent = true
-		cc.DisableWebseeds = true
-		cc.ListenHost = func(string) string { return "127.0.0.1" }
-	}
-	cl, err := newClient(cc)
+	cl, err := newClient(e.clientConfig())
 	if err != nil {
 		return nil, fmt.Errorf("torrent client: %w", err)
 	}
@@ -843,7 +811,7 @@ func DirsPresent(dirs ...string) func() error {
 func (e *Engine) attach(en *entry, spec *atorrent.TorrentSpec) error {
 	spec.Storage = e.fileStorage(en.rec.SaveDir)
 	if e.cfg.LocalOnly {
-		spec.Trackers = nil
+		spec.Trackers, spec.Sources = nil, nil // no network: not even a magnet's xs=
 	}
 	en.trackers = flatTrackers(spec.Trackers)
 	en.private = privateInfo(spec.InfoBytes)
@@ -1808,11 +1776,6 @@ func (e *Engine) removeIf(ctx context.Context, infohash, mode string, deleteData
 	return nil
 }
 
-// SetMode changes the mode. See SetModeTo.
-func (e *Engine) SetMode(ctx context.Context, infohash, mode string) error {
-	return e.SetModeTo(ctx, infohash, mode, "")
-}
-
 // SetModeTo changes the mode. stream→download/seed downloads the rest and,
 // once complete (immediately if already complete), moves the data from
 // StreamDir/<infohash> to saveDir (or EngineConfig.DownloadDir; when both are
@@ -2297,6 +2260,74 @@ func (en *entry) NewReader(ctx context.Context, fileIndex int) (io.ReadSeekClose
 	fr.onClose = func() { en.readers.Add(-1) }
 	live = true
 	return fr, nil
+}
+
+// clientConfig is the anacrolix client's configuration for e.cfg: what the
+// engine's callbacks, limits and storage are, and which of its network
+// switches are off. It opens nothing (a test reads the guard from it).
+func (e *Engine) clientConfig() *atorrent.ClientConfig {
+	cc := atorrent.NewDefaultClientConfig()
+	cc.DataDir = e.cfg.StreamDir
+	cc.DefaultStorage = e.fileStorage(e.cfg.StreamDir)
+	cc.ListenPort = e.cfg.ListenPort
+	cc.Seed = true
+	cc.NoUpload = e.cfg.NoUpload
+	cc.DisableAggressiveUpload = e.cfg.noAggressiveUpload
+	// a middling server: the library's defaults (50 connections per torrent,
+	// 100 half-open) are made for a desktop
+	cc.EstablishedConnsPerTorrent = 30
+	cc.TotalHalfOpenConns = 40
+	cc.Slogger = slog.New(quietHandler{slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn})}).With("component", "anacrolix")
+	e.reqs.install(&cc.Callbacks)
+	e.installIncoming(&cc.Callbacks)
+	e.installPeerSeen(&cc.Callbacks)
+	e.installYourIP(&cc.Callbacks)
+	// Always our own limiter (anacrolix shares one "unlimited" instance
+	// between clients): the settings change it at runtime.
+	e.upLimit = rate.NewLimiter(rate.Inf, 0)
+	cc.UploadRateLimiter = e.upLimit
+	e.SetUploadLimit(e.cfg.UploadLimit)
+	if e.cfg.DownloadLimit > 0 {
+		cc.DownloadRateLimiter = rate.NewLimiter(rate.Limit(e.cfg.DownloadLimit), 0)
+	}
+	// Outside LocalOnly anacrolix asks the router for ListenPort (TCP and
+	// UDP) by UPnP at start (NoDefaultPortForwarding stays false). The
+	// discovery is multicast on the local network: behind Docker bridge
+	// networking it never reaches the router (deploy/README.md).
+	cc.NoDefaultPortForwarding = e.cfg.NoUPnP
+	if e.cfg.LocalOnly {
+		cc.NoDHT = true
+		cc.DisableTrackers = true
+		cc.DisablePEX = true
+		cc.NoDefaultPortForwarding = true
+		cc.DisableIPv6 = true
+		cc.DisableUTP = true
+		cc.DisableWebtorrent = true
+		cc.DisableWebseeds = true
+		cc.ListenHost = func(string) string { return "127.0.0.1" }
+	}
+	if !e.cfg.LocalOnly {
+		guardNetwork(cc)
+	}
+	return cc
+}
+
+// guardNetwork makes every HTTP fetch of the client (webseeds, magnet
+// xs=/as= sources, HTTP and websocket trackers) and every UDP tracker write
+// refuse local, private and metadata addresses: those URLs come from
+// torrents anyone can publish. The check is on the dialled IP, so redirects
+// and DNS tricks are covered too.
+func guardNetwork(cc *atorrent.ClientConfig) {
+	cc.HTTPProxy = nil // a proxy would connect for us and dodge the check
+	cc.HTTPDialContext = netguard.DialContext
+	// webseeds and xs=/as= sources use this transport (HTTP/2 stays on, as
+	// with anacrolix's own; no env proxy, 10 connections per host as its
+	// default)
+	web := netguard.Transport(nil)
+	web.Proxy, web.MaxConnsPerHost = nil, 10
+	cc.WebTransport = web
+	cc.TrackerDialContext = netguard.DialContext
+	cc.TrackerListenPacket = netguard.ListenPacket
 }
 
 // newClient starts the anacrolix client. On a host without IPv6 (a kernel

@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	atorrent "github.com/anacrolix/torrent"
@@ -52,6 +53,7 @@ func (e *Engine) NoSeeding() bool {
 // tick, and SetNoSeeding).
 func (e *Engine) sweepNoSeeding() {
 	var drops []*atorrent.Torrent
+	var unparks []*entry
 	e.mu.Lock()
 	select {
 	case <-e.closing:
@@ -59,11 +61,13 @@ func (e *Engine) sweepNoSeeding() {
 		return
 	default:
 	}
-	for _, en := range e.bySeq() {
+	// every second: no sorted copy of the entries; only the unparking (the
+	// setting just turned off) goes oldest first
+	for _, en := range e.entries {
 		switch {
 		case !e.noSeed:
 			if en.parked && !en.moving { // a moving one: next tick, after Finish
-				e.unpark(en)
+				unparks = append(unparks, en)
 			} else if en.uploadOff && en.t != nil {
 				en.uploadOff = false
 				if en.hold != StatusPaused {
@@ -90,6 +94,10 @@ func (e *Engine) sweepNoSeeding() {
 				en.t.DisallowDataUpload()
 			}
 		}
+	}
+	sort.Slice(unparks, func(i, j int) bool { return unparks[i].seq < unparks[j].seq })
+	for _, en := range unparks {
+		e.unpark(en)
 	}
 	e.mu.Unlock()
 	for _, t := range drops {

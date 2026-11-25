@@ -9,11 +9,7 @@ package admin
 
 import (
 	"context"
-	"encoding/json"
-	"io"
-	"log"
 	"net/http"
-	"strconv"
 
 	"github.com/antresol-app/antresol-addon-torrents/internal/acquire"
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/i18n"
@@ -157,40 +153,4 @@ func userID(r *http.Request) int64 {
 		return u.ID
 	}
 	return 0
-}
-
-// writeErr writes {"error": msg} with msg (Russian) in the request's language.
-func writeErr(w http.ResponseWriter, r *http.Request, code int, msg string) {
-	addonkit.WriteError(w, code, i18n.Localize(r.Context(), msg))
-}
-
-func internalErr(w http.ResponseWriter, r *http.Request, what string, err error) {
-	if r.Context().Err() != nil {
-		return // the client went away
-	}
-	log.Printf("admin: %s: %v", what, err)
-	writeErr(w, r, http.StatusInternalServerError, "Внутренняя ошибка сервера")
-}
-
-// decode reads a JSON body (at most 1 MiB); false: a 400 is written.
-func decode(w http.ResponseWriter, r *http.Request, v any) bool {
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-	if err == nil {
-		err = json.Unmarshal(body, v)
-	}
-	if err != nil {
-		writeErr(w, r, http.StatusBadRequest, "Неверный запрос")
-		return false
-	}
-	return true
-}
-
-// idParam is the path's {name} as a positive id; false: a 400 is written.
-func idParam(w http.ResponseWriter, r *http.Request, name string) (int64, bool) {
-	id, err := strconv.ParseInt(r.PathValue(name), 10, 64)
-	if err != nil || id <= 0 {
-		writeErr(w, r, http.StatusBadRequest, "Неверный запрос")
-		return 0, false
-	}
-	return id, true
 }

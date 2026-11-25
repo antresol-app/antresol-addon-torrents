@@ -12,6 +12,7 @@ import (
 	"github.com/antresol-app/antresol-addon-torrents/internal/acquire"
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/metadata/tmdb"
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/release"
+	"github.com/antresol-app/antresol-addon-torrents/internal/httpx"
 	"github.com/antresol-app/antresol-addon-torrents/internal/indexer"
 	"github.com/antresol-app/antresol/addonkit"
 )
@@ -116,7 +117,7 @@ func newAppEnv(t *testing.T) *appEnv {
 			return "in-1", nil
 		},
 		WatchError: func(w http.ResponseWriter, r *http.Request, _ string, err error) {
-			writeErr(w, r, http.StatusBadGateway, err.Error())
+			httpx.WriteErr(w, r, http.StatusBadGateway, err.Error())
 		},
 	}
 	mux := http.NewServeMux()

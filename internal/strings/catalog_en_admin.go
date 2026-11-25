@@ -11,6 +11,8 @@ func init() {
 		"FlareSolverr не ответил за 10 секунд. Проверьте адрес и что он запущен.":   "FlareSolverr did not answer within 10 seconds. Check the address and that it is running.",
 		"Не удалось подключиться к FlareSolverr. Проверьте адрес и что он запущен.": "Could not connect to FlareSolverr. Check the address and that it is running.",
 		"По этому адресу отвечает не FlareSolverr.":                                 "Something other than FlareSolverr answers at this address.",
+		"Укажите путь к файлу prowlarr.db":                                          "Enter the path of the prowlarr.db file",
+
 		"Неверный запрос":           "Bad request",
 		"Внутренняя ошибка сервера": "Internal server error",
 		"Неизвестный формат музыки": "Unknown music format",

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/sqlitesnap"
 	_ "modernc.org/sqlite"
 )
 
@@ -442,3 +443,13 @@ func TestProwlarrNoTagsColumn(t *testing.T) {
 		t.Fatalf("preview = %+v, %v", list, err)
 	}
 }
+
+// PreviewProwlarr is PreviewProwlarrIn with the snapshot in the system's
+// temp folder (the program always names the folder).
+func (m *Manager) PreviewProwlarr(ctx context.Context, prowlarrDBPath string) ([]Imported, error) {
+	return m.prowlarr(ctx, prowlarrDBPath, "", true)
+}
+
+func snapshotDB(src, dst string) error { return sqlitesnap.CopyTo(src, dst) }
+
+func stampOf(p string) sqlitesnap.Stamp { return sqlitesnap.StampOf(p) }

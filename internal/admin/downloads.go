@@ -2,61 +2,18 @@ package admin
 
 import (
 	"context"
-	"errors"
 	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/antresol-app/antresol-addon-torrents/internal/acquire"
-	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/i18n"
+	"github.com/antresol-app/antresol-addon-torrents/internal/httpx"
 	"github.com/antresol-app/antresol/addonkit"
 )
 
 // downloads: «Загрузки» (the torrents list and its actions) and the
 // engine's connectivity («Входящие подключения»).
 type downloads struct{ Deps }
-
-// acquireErr writes a service error: its Russian message in the request's
-// language, with the old build's status codes.
-func acquireErr(w http.ResponseWriter, r *http.Request, what string, err error) {
-	if r.Context().Err() != nil {
-		return
-	}
-	msg, ok := acquire.UserMessage(err)
-	if !ok {
-		internalErr(w, r, what, err)
-		return
-	}
-	code := http.StatusInternalServerError
-	switch {
-	case errors.Is(err, acquire.ErrInvalid):
-		code = http.StatusBadRequest
-	case errors.Is(err, acquire.ErrNotFound), errors.Is(err, acquire.ErrNoRelease):
-		code = http.StatusNotFound
-	case errors.Is(err, acquire.ErrUnavailable):
-		code = http.StatusServiceUnavailable
-	case errors.Is(err, acquire.ErrConflict), errors.Is(err, acquire.ErrInProgress):
-		code = http.StatusConflict
-	case errors.Is(err, acquire.ErrNoFiles):
-		code = http.StatusUnprocessableEntity
-	case errors.Is(err, acquire.ErrSource):
-		code = http.StatusBadGateway
-	}
-	if code >= 500 {
-		log.Printf("admin: %s: %v", what, err)
-	}
-	addonkit.WriteError(w, code, i18n.Message(r.Context(), msgErr{msg, err}))
-}
-
-// msgErr is a service's Russian message with the error it came with
-// (i18n.Message renders an *i18n.Error in the chain, else localizes msg).
-type msgErr struct {
-	msg string
-	err error
-}
-
-func (e msgErr) Error() string { return e.msg }
-func (e msgErr) Unwrap() error { return e.err }
 
 // GET /api/admin/torrents
 func (d *downloads) list(w http.ResponseWriter, r *http.Request) {
@@ -126,7 +83,7 @@ func (d *downloads) action(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := f(r.Context(), ih); err != nil {
-		acquireErr(w, r, "torrent action", err)
+		httpx.AcquireErr(w, r, "admin", "torrent action", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -137,12 +94,12 @@ func (d *downloads) promote(w http.ResponseWriter, r *http.Request, ih string) {
 	var in struct {
 		Force bool `json:"force"`
 	}
-	if r.ContentLength != 0 && !decode(w, r, &in) {
+	if r.ContentLength != 0 && !httpx.Decode(w, r, &in) {
 		return
 	}
 	st, err := d.Acquire.Promote(r.Context(), ih, in.Force)
 	if err != nil {
-		acquireErr(w, r, "promote", err)
+		httpx.AcquireErr(w, r, "admin", "promote", err)
 		return
 	}
 	addonkit.WriteJSON(w, http.StatusOK, map[string]string{"status": st})
@@ -154,7 +111,7 @@ func (d *downloads) remove(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	del := q.Get("data") == "1" || q.Get("deleteData") == "true"
 	if err := d.Acquire.Remove(r.Context(), r.PathValue("ih"), del); err != nil {
-		acquireErr(w, r, "remove torrent", err)
+		httpx.AcquireErr(w, r, "admin", "remove torrent", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -170,7 +127,7 @@ func (d *downloads) status(w http.ResponseWriter, r *http.Request) {
 	}
 	st, err := d.Acquire.TorrentStatus(r.PathValue("ih"), file)
 	if err != nil {
-		acquireErr(w, r, "torrent status", err)
+		httpx.AcquireErr(w, r, "admin", "torrent status", err)
 		return
 	}
 	addonkit.WriteJSON(w, http.StatusOK, st)

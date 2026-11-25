@@ -9,6 +9,7 @@ import (
 	"github.com/antresol-app/antresol-addon-torrents/internal/corecopy/i18n"
 	"github.com/antresol-app/antresol-addon-torrents/internal/indexer/cardigann"
 	"github.com/antresol-app/antresol-addon-torrents/internal/indexer/opds"
+	"github.com/antresol-app/antresol-addon-torrents/internal/netguard"
 )
 
 var errSourceTimeout = errors.New("source timeout")
@@ -62,6 +63,12 @@ func humanErr(err error) error {
 			return i18n.Errorf("Не удалось войти на сайт: %s.", errors.New(cardigann.RedactText(rest)))
 		}
 		return i18n.Errorf("Не удалось войти на сайт. Проверьте логин и пароль.")
+	// the address guard of tracker sources: a redirect or a link of the site
+	// went to another local address (a dial error keeps ErrBlocked in its chain)
+	case errors.Is(err, netguard.ErrBlocked):
+		return i18n.Errorf("Antresol заблокировал обращение источника к другому адресу в домашней сети (редирект или ссылка сайта). Источник ходит только на свой сайт: если он у вас дома, укажите его адрес в поле «Адрес сайта» в настройках источника.")
+	case errors.Is(err, cardigann.ErrLocalAddress):
+		return i18n.Errorf("Сайт просит пройти проверку браузером, но FlareSolverr не открывает адреса домашней сети. Проверьте адрес сайта в настройках источника.")
 	case errors.Is(err, cardigann.ErrNoSolver):
 		return i18n.Errorf("Сайт закрыт защитой от ботов (Cloudflare). Нужен FlareSolverr — укажите его адрес в разделе «Настройки → Сервер → Настройки загрузок».")
 	case errors.Is(err, cardigann.ErrCloudflare):

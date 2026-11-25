@@ -127,20 +127,9 @@
   width: var(--control-h-sm);
 }
 
-/* the delete sheet's «Удалить файлы с диска» */
+/* the delete sheet's «Удалить файлы с диска» (a ui/Checkbox) */
 .check {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
   margin-top: var(--s-3h);
-  font: var(--t-footnote);
-  color: var(--label);
-  cursor: pointer;
-}
-.check input {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  accent-color: var(--destructive);
 }
 
 @media (max-width: 699px) {
@@ -159,12 +148,5 @@
   }
   .trailing {
     gap: var(--s-1);
-  }
-  .check {
-    font: var(--t-subhead);
-  }
-  .check input {
-    width: var(--icon-md);
-    height: var(--icon-md);
   }
 }

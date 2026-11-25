@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"sync"
@@ -300,6 +301,11 @@ func checkRemoteURL(app, base string) *RemoteError {
 	}
 	if u.User != nil || strings.ContainsAny(base, "?#") {
 		return remoteErr(nil, "Адрес %s не должен содержать логин, пароль или параметры — их вводят в отдельных полях", app)
+	}
+	// the old services run on this host or in the LAN; a link-local address
+	// (169.254.0.0/16, fe80::/10: a cloud's metadata service) is never one
+	if ip, err := netip.ParseAddr(u.Hostname()); err == nil && (ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast()) {
+		return remoteErr(nil, "Адрес %s не может быть link-local адресом (169.254.x.x, fe80::)", app)
 	}
 	return nil
 }
