@@ -8,10 +8,11 @@
     "ru": "Поиск и загрузка раздач, источники, торрент-движок",
     "en": "Searching and downloading releases, sources, the torrent engine"
   },
-  "version": "0.4.19",
+  "version": "0.4.20",
   "author": "Antresol",
   "homepage": "",
   "contract": 1,
+  "minCore": "0.8.28",
   "platforms": {},
   "access": "adults",
   "helpers": [
